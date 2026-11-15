@@ -86,8 +86,13 @@ const PED_HALF = 0.20;     // 台の半分の幅 (m)
 const PED_TOP  = 0.40;     // 台の上面の高さ (m)
 const SIZE_MIN = 0.06, SIZE_MAX = 0.30;   // 出てくる物の大きさ（いちばん長い辺, m）
 const MASS_MAX = 3;                       // これより重い推定値の物は出さない (kg)
+const MASS_MIN = .08;                     // 軽すぎる物は振動しやすいので、これより軽くしない (kg)
 const HOLD_GAP = 0.06;     // 構えている物の下面と、塔のてっぺんとのすき間 (m)
-const SETTLE_FRAMES = 45;  // これだけ静止が続いたら「積めた」とみなす（物理ステップ数）
+const SETTLE_WINDOW = 0.5; // この秒数のあいだ、どの物も…
+const SETTLE_MOVE = 0.002; //   …位置が 2mm 以上ずれず、
+const SETTLE_TURN = 1.5;   //   …向きが 1.5° 以上変わらなければ「積めた」とみなす
+// 物理エンジンの接触計算は、軽い物や薄い物で細かく震え続けることがある。
+// 瞬間の速さで判定すると、その震えのせいでいつまでも「止まった」にならないので、一定時間の移動量で判定する。
 const SETTLE_TIMEOUT = 7;  // 何秒たっても揺れていたら、落ちていなければ成功扱い
 const floorMat = FLOOR.concrete;
 const pedMat = MAT.wood;
@@ -141,6 +146,10 @@ await RAPIER.init();
 const world = new RAPIER.World({x:0, y:-9.81, z:0});
 const eventQueue = new RAPIER.EventQueue(true);
 const DT = 1/60; world.timestep = DT;
+// 積み重ねを安定させる設定（初期値は 4 / 1 / 1m）
+world.numSolverIterations = 8;
+world.numAdditionalFrictionIterations = 4;
+world.lengthUnit = 0.1;   // 物の大きさがだいたい10cmなので、誤差の許容量をそれに合わせる
 const colliderToObj = new Map();
 {
   const fb = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
@@ -205,10 +214,10 @@ function spawnBody(entry, pos, quat){
   const m = MAT[entry.mat];
   const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
     .setTranslation(pos.x,pos.y,pos.z).setRotation({x:quat.x,y:quat.y,z:quat.z,w:quat.w})
-    .setCcdEnabled(true).setLinearDamping(.2).setAngularDamping(.6));
-  const cd = entry.collider().setRestitution(Math.min(m.rest,.15)).setFriction(Math.max(m.fric,.8))
+    .setLinearDamping(.2).setAngularDamping(.6));   // 落とす高さが低いので CCD は使わない（接触面の振動の原因になる）
+  const cd = entry.collider().setRestitution(Math.min(m.rest,.15)).setFriction(Math.max(m.fric,.8)).setContactSkin(.002)
     .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS);
-  if (entry.mass) cd.setMass(clamp(entry.mass, .02, MASS_MAX)); else cd.setDensity(m.density);
+  if (entry.mass) cd.setMass(clamp(entry.mass, MASS_MIN, MASS_MAX)); else cd.setDensity(m.density);
   const col = world.createCollider(cd, body);
   const o = {entry, mat:entry.mat, size:entry.size, body, col, mesh:held.mesh, pv:{x:0,y:0,z:0}, pw:{x:0,y:0,z:0}};
   colliderToObj.set(col.handle, o);
@@ -279,7 +288,7 @@ let state = 'loading';
 let held = null;            // {entry, mesh, quat, x, z}
 let nextP = null, nextEntry = null;
 let towerTop = PED_TOP, bestHeight = 0, bestCount = 0;
-let settleCount = 0, settleTime = 0;
+let settleTime = 0, settled = false, histTick = 0;
 let turnId = 0;            // 古い読み込みが後から割り込まないための番号
 const placed = [];          // 積めた物の名前
 try { const b = JSON.parse(localStorage.getItem('toybox-tower-best') || 'null'); if (b) { bestHeight = b.height; bestCount = b.count; } } catch(e){}
@@ -342,7 +351,7 @@ function drop(){
   m.traverse(o=>{ if (o.isMesh){ o.material.opacity = 1; o.material.transparent = false; } });
   spawnBody(held.entry, m.position, m.quaternion);
   guide.visible = ringMark.visible = false;
-  state = 'settling'; settleCount = 0; settleTime = 0; setButtons();
+  state = 'settling'; settleTime = 0; settled = false; histTick = 0; for (const o of objs) o.hist = []; setButtons();
 }
 function rotateHeld(axis, angle){
   if (state !== 'aiming') return;
@@ -353,11 +362,32 @@ function rotateHeld(axis, angle){
   held.quat.premultiply(_q);
   placeHeld();
 }
+// 各物の位置と向きを記録し、直近 SETTLE_WINDOW 秒でほとんど動いていなければ true
+const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion();
+function recordAndCheckStill(){
+  const keep = Math.round(SETTLE_WINDOW / (6*DT)) + 1;
+  let still = settleTime >= SETTLE_WINDOW;
+  for (const o of objs){
+    const t = o.body.translation(), r = o.body.rotation();
+    (o.hist ??= []).push({x:t.x, y:t.y, z:t.z, q:[r.x,r.y,r.z,r.w]});
+    if (o.hist.length > keep) o.hist.shift();
+    if (o.hist.length < keep){ still = false; continue; }
+    const a = o.hist[0], b = o.hist[o.hist.length-1];
+    _qa.fromArray(a.q); _qb.fromArray(b.q);
+    if (Math.hypot(a.x-b.x, a.y-b.y, a.z-b.z) > SETTLE_MOVE || THREE.MathUtils.radToDeg(_qa.angleTo(_qb)) > SETTLE_TURN) still = false;
+  }
+  return still;
+}
 function checkAfterSettle(){
+  window.__tower.log.push({n: placed.length+1, t: +settleTime.toFixed(2), timeout: !settled,
+    moving: objs.map(o=>{ const v=o.body.linvel(), w=o.body.angvel(); return [o.entry.name.slice(0,18), +Math.hypot(v.x,v.y,v.z).toFixed(3), +Math.hypot(w.x,w.y,w.z).toFixed(2), +o.body.mass().toFixed(2)]; })
+      .filter(x=>x[1]>.03||x[2]>.3)});
   const r = measure();
   if (r.fallen) return gameOver(r.fallen);
   placed.push(held.entry.name);
   towerTop = r.top;
+  // 止まった塔は物理エンジン上で休止させる（震えが消える。次の物が当たると自動で動き出す）
+  if (settled) for (const o of objs) o.body.sleep();
   updateHud();
   if (placed.length % 5 === 0) toast(`${placed.length} 個目！ ${(r.height*100).toFixed(1)} cm`);
   held = null;
@@ -458,7 +488,7 @@ $('startBtn').onclick = async () => {
 };
 
 // テスト用：ブラウザのコンソールから状態を確認できるようにする
-window.__tower = { objs, measure, get state(){ return state; } };
+window.__tower = { objs, world, measure, log: [], get state(){ return state; } };
 
 /* =========================================================
    メインループ
@@ -471,8 +501,7 @@ renderer.setAnimationLoop(now=>{
     stepPhysics(); acc -= DT; n++;
     if (state === 'settling'){
       settleTime += DT;
-      const moving = objs.some(o=>{ const v=o.body.linvel(), w=o.body.angvel(); return Math.hypot(v.x,v.y,v.z) > .03 || Math.hypot(w.x,w.y,w.z) > .3; });
-      settleCount = moving ? 0 : settleCount + 1;
+      if (++histTick % 6 === 0) settled = recordAndCheckStill();   // 0.1秒ごとに記録
     }
   }
   if (n === 4) acc = 0;
@@ -480,7 +509,7 @@ renderer.setAnimationLoop(now=>{
   if (state === 'settling' || state === 'aiming' || state === 'loading'){
     const r = measure();
     if (r.fallen) gameOver(r.fallen);
-    else if (state === 'settling' && (settleCount >= SETTLE_FRAMES || settleTime > SETTLE_TIMEOUT)) checkAfterSettle();
+    else if (state === 'settling' && (settled || settleTime > SETTLE_TIMEOUT)) checkAfterSettle();
   }
   // カメラは塔の高さに合わせて上がる
   const ty = Math.max(PED_TOP + .08, towerTop - .05);

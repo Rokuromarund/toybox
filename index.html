@@ -132,6 +132,10 @@ await RAPIER.init();
 const world = new RAPIER.World({x:0, y:-9.81, z:0});
 const eventQueue = new RAPIER.EventQueue(true);
 const DT = 1/60; world.timestep = DT;
+// 物が重なったときの震えを減らす設定（初期値は 4 / 1 / 1m）
+world.numSolverIterations = 8;
+world.numAdditionalFrictionIterations = 4;
+world.lengthUnit = 0.1;   // 物の大きさがだいたい10cmなので、誤差の許容量をそれに合わせる
 
 const colliderToObj = new Map();   // collider handle → 物体 or 'floor'
 const floorColliders = [];
