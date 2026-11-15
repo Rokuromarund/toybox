@@ -45,7 +45,7 @@
 <div id="start">
   <button id="startBtn">タップして開始</button>
   <p>床をタップ → 選んでいる物を落とす<br>物体をタップ → つついて跳ね上げる<br>ドラッグ → 視点を回す／2本指で拡大</p>
-  <p>「モデルを選ぶ」から Google Scanned Objects の1,033個の中から選べます（その場でダウンロードされます）。</p>
+  <p>「モデルを選ぶ」で Google Scanned Objects の1,033個から選べます。「落とす」「×8」は、ランダムを選んでいると1,033個全体から選んで、その場でダウンロードします。</p>
 </div>
 <div id="info"><b>物理音シミュレーター</b><br>物体をタップすると詳細を表示</div>
 <div id="credit">3D models: <a href="https://huggingface.co/datasets/codepawl/scanned-objects-glb" target="_blank">Google Scanned Objects</a><br>by Google Research, CC BY 4.0</div>
@@ -280,7 +280,7 @@ function loadModel(meta){
       mesh: () => root.clone(true),
       collider: () => RAPIER.ColliderDesc.convexHull(points) || RAPIER.ColliderDesc.ball(size/2),
     };
-    catalog.push(entry); refreshPick(entry);
+    catalog.push(entry); refreshPick();
     markLoaded(meta.id);
     return entry;
   });
@@ -290,10 +290,15 @@ function loadModel(meta){
 }
 
 const pickSel = document.getElementById('pick');
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ALL = -2, LOADED = -1;   // プルダウンの特別な値
 function refreshPick(select){
-  pickSel.innerHTML = '<option value="-1">ランダム（読込済み）</option>' +
-    catalog.map((c,i)=>`<option value="${i}">${c.name.slice(0,28)}</option>`).join('');
-  if (select) pickSel.value = catalog.indexOf(select);
+  const prev = pickSel.value;
+  pickSel.innerHTML =
+    `<option value="${ALL}">ランダム（全${META.length || '…'}個から）</option>` +
+    `<option value="${LOADED}">ランダム（読込済み ${catalog.length}個から）</option>` +
+    catalog.map((c,i)=>`<option value="${i}">${esc(c.name.slice(0,28))}</option>`).join('');
+  pickSel.value = select ? catalog.indexOf(select) : (prev || ALL);
 }
 refreshPick();
 
@@ -329,15 +334,27 @@ function removeObj(o){
   scene.remove(o.mesh);
   objs.splice(objs.indexOf(o),1);
 }
-function pickEntry(){
+// mode: ALL=全1,033個から / LOADED=読込済みから / 0以上=読込済みの何番目か
+async function pickEntry(mode){
+  if (mode === ALL && META.length){
+    const meta = META[Math.floor(Math.random()*META.length)];
+    try { return await loadModel(meta); }
+    catch(err) { console.error(err); toast(`${meta.name} の読み込みに失敗しました`); return undefined; }
+  }
   if (!catalog.length) return null;
-  const i = +pickSel.value;
-  return catalog[i >= 0 ? i : Math.floor(Math.random()*catalog.length)];
+  return catalog[mode >= 0 ? mode : Math.floor(Math.random()*catalog.length)];
 }
 const rnd = r => (Math.random()*2-1)*r;
-const dropAt = (x,z) => { const e = pickEntry(); if (!e) { toast('先に「モデルを選ぶ」から物体を選んでください'); return; } spawn(e, {x, y:Math.max(.4, e.size+.2), z}); };
+async function dropAt(x, z, mode = +pickSel.value){
+  const e = await pickEntry(mode);
+  if (e === null) { toast(META.length ? '先に「モデルを選ぶ」から物体を選んでください' : '一覧を読み込み中です'); return; }
+  if (!e) return;
+  spawn(e, {x, y:Math.max(.4, e.size+.2), z});
+  if (mode === ALL) toast(`${e.name}（${MAT[e.mat].label}）`);
+}
+function rain(mode = +pickSel.value){ for(let i=0;i<8;i++) setTimeout(()=>dropAt(rnd(.3), rnd(.3), mode), i*150); }
 document.getElementById('dropBtn').onclick = () => dropAt(rnd(.15), rnd(.15));
-document.getElementById('rainBtn').onclick = () => { for(let i=0;i<8;i++) setTimeout(()=>dropAt(rnd(.3), rnd(.3)), i*150); };
+document.getElementById('rainBtn').onclick = () => rain();
 document.getElementById('clearBtn').onclick = () => { while(objs.length) removeObj(objs[0]); };
 document.getElementById('floorSel').onchange = e => {
   floor = FLOOR[e.target.value];
@@ -353,7 +370,6 @@ document.getElementById('massSel').onchange = e => { massMode = e.target.value; 
 const picker = document.getElementById('picker'), grid = document.getElementById('grid');
 const pkSearch = document.getElementById('pkSearch'), pkCat = document.getElementById('pkCat');
 const PAGE = 60; let shown = 0, filtered = [];
-const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function applyFilter(){
   const q = pkSearch.value.trim().toLowerCase(), c = pkCat.value;
   filtered = META.filter(m => (!c || m.category===c) && (!q || `${m.id} ${m.name} ${m.brand}`.toLowerCase().includes(q)));
@@ -381,6 +397,9 @@ grid.addEventListener('click', async e=>{
     spawn(entry, {x:rnd(.1), y:Math.max(.4, entry.size+.2), z:rnd(.1)});
     toast(`${entry.name}：${MAT[entry.mat].label}として配置`);
   } catch(err) { console.error(err); toast(`${meta.name} の読み込みに失敗しました`); }
+});
+grid.addEventListener('scroll', ()=>{
+  if (shown < filtered.length && grid.scrollTop + grid.clientHeight > grid.scrollHeight - 400) showMore();
 });
 pkSearch.addEventListener('input', applyFilter);
 pkCat.addEventListener('change', applyFilter);
@@ -527,6 +546,7 @@ const ready = (async () => {
   const cats = [...new Set(META.map(m=>m.category).filter(Boolean))].sort();
   pkCat.insertAdjacentHTML('beforeend', cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join(''));
   applyFilter();
+  refreshPick();
   // 最初に材質がばらけるよう、カテゴリ違いで6個読み込む
   const pool = [...cats].sort(()=>Math.random()-.5).slice(0,6);
   const first = pool.map(c=>{ const l = META.filter(m=>m.category===c); return l[Math.floor(Math.random()*l.length)]; });
@@ -538,8 +558,8 @@ document.getElementById('startBtn').onclick = async () => {
   document.getElementById('start').remove();
   toast('モデルを読み込み中…');
   await ready;
-  pickSel.value = -1;
-  document.getElementById('rainBtn').click();
+  rain(LOADED);          // 最初は読み込み済みの物ですぐ始める
+  pickSel.value = ALL;   // 以降は全1,033個から選ぶ
 };
 
 /* =========================================================
