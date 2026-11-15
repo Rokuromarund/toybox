@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>積み上げタワー</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#1d2126;font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif;color:#eee;touch-action:none;-webkit-user-select:none;user-select:none}
+  canvas{display:block}
+  button{font:inherit}
+  #hud{position:fixed;left:8px;top:8px;background:rgba(0,0,0,.55);padding:8px 12px;border-radius:10px;line-height:1.35;pointer-events:none}
+  #hud .big{font-size:22px;font-weight:700}
+  #hud .sub{font-size:11px;color:#bbb}
+  #next{position:fixed;right:8px;top:8px;background:rgba(0,0,0,.55);padding:6px;border-radius:10px;width:84px;text-align:center;font-size:10px;color:#ccc;pointer-events:none}
+  #next img{width:72px;height:72px;object-fit:contain;background:#2e343b;border-radius:6px;display:block;margin:2px auto}
+  #next .nm{height:2.5em;overflow:hidden;line-height:1.25}
+  #now{position:fixed;left:50%;transform:translateX(-50%);top:8px;background:rgba(0,0,0,.55);padding:5px 10px;border-radius:8px;font-size:12px;max-width:calc(100vw - 230px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+  #bar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:8px;padding:10px 10px calc(10px + env(safe-area-inset-bottom));background:rgba(0,0,0,.6);justify-content:center}
+  #bar button{font-size:15px;padding:12px 14px;border-radius:12px;border:1px solid #556;background:#2b3138;color:#eee;min-width:72px}
+  #bar button:disabled{opacity:.4}
+  #bar .primary{background:#3a6fd8;border-color:#3a6fd8;min-width:110px}
+  #hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom));font-size:12px;color:#ccc;background:rgba(0,0,0,.45);padding:4px 10px;border-radius:8px;pointer-events:none;white-space:nowrap}
+  .overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,12,15,.86);z-index:10;text-align:center;padding:20px;gap:12px}
+  .overlay h1{margin:0;font-size:26px}
+  .overlay p{font-size:13px;color:#bbb;max-width:340px;line-height:1.7;margin:0}
+  .overlay button{font-size:18px;padding:12px 28px;border-radius:12px;border:none;background:#4a8cff;color:#fff}
+  .overlay a{color:#9cf;font-size:12px}
+  #over{display:none}
+  #over .score{font-size:44px;font-weight:800}
+  #over ul{list-style:none;padding:0;margin:0;font-size:11px;color:#aaa;max-height:28vh;overflow:auto;max-width:320px}
+  #toast{position:fixed;left:50%;top:44px;transform:translateX(-50%);background:#222d;padding:6px 12px;border-radius:8px;font-size:12px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:20;max-width:90vw}
+  #credit{position:fixed;right:8px;bottom:calc(72px + env(safe-area-inset-bottom));font-size:9px;color:#9aa;text-align:right}
+  #credit a{color:#9cf}
+</style>
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<div id="start" class="overlay">
+  <h1>積み上げタワー</h1>
+  <p>次々に出てくる日用品を、台から落とさずにどこまで高く積めるか。<br>
+     物をドラッグして位置を決め、「回す」「倒す」で向きを変えて「落とす」。<br>
+     1つでも台から落ちたら終わりです。物以外の場所をドラッグすると視点が回ります。</p>
+  <button id="startBtn">スタート</button>
+  <a href="../">← 物理音シミュレーターへ</a>
+</div>
+<div id="over" class="overlay">
+  <h1>崩れた！</h1>
+  <div class="score" id="ovScore"></div>
+  <p id="ovDetail"></p>
+  <ul id="ovList"></ul>
+  <button id="retryBtn">もう一度</button>
+  <a href="../">← 物理音シミュレーターへ</a>
+</div>
+
+<div id="hud"><div class="big" id="hHeight">0.0 cm</div><div class="sub" id="hCount">0 個</div><div class="sub" id="hBest"></div></div>
+<div id="now"></div>
+<div id="next">つぎ<img id="nextImg" alt=""><div class="nm" id="nextName"></div></div>
+<div id="hint">物をドラッグして位置を決める</div>
+<div id="credit">3D models: <a href="https://huggingface.co/datasets/codepawl/scanned-objects-glb" target="_blank">Google Scanned Objects</a> by Google Research, CC BY 4.0</div>
+<div id="toast"></div>
+<div id="bar">
+  <button id="spinBtn">↻ 回す</button>
+  <button id="tipBtn">⤵ 倒す</button>
+  <button id="dropBtn" class="primary">落とす</button>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import * as RAPIER_NS from 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/+esm';
+import { glbUrl, thumbUrl, MAT, FLOOR, OVERRIDES, decideMat, loadMetadata, loadHulls, hullFor, initAudio, ring, clamp } from '../common.js';
+const RAPIER = RAPIER_NS.default ?? RAPIER_NS;
+const $ = id => document.getElementById(id);
+
+/* =========================================================
+   設定
+   ========================================================= */
+const PED_HALF = 0.20;     // 台の半分の幅 (m)
+const PED_TOP  = 0.40;     // 台の上面の高さ (m)
+const SIZE_MIN = 0.06, SIZE_MAX = 0.30;   // 出てくる物の大きさ（いちばん長い辺, m）
+const MASS_MAX = 3;                       // これより重い推定値の物は出さない (kg)
+const HOLD_GAP = 0.06;     // 構えている物の下面と、塔のてっぺんとのすき間 (m)
+const SETTLE_FRAMES = 45;  // これだけ静止が続いたら「積めた」とみなす（物理ステップ数）
+const SETTLE_TIMEOUT = 7;  // 何秒たっても揺れていたら、落ちていなければ成功扱い
+const floorMat = FLOOR.concrete;
+const pedMat = MAT.wood;
+
+/* =========================================================
+   描画
+   ========================================================= */
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1d2126);
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.01, 50);
+camera.position.set(0.75, PED_TOP+0.45, 0.95);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, PED_TOP+0.08, 0);
+controls.enableDamping = true;
+controls.enablePan = false;
+controls.maxPolarAngle = Math.PI*0.62;
+controls.minDistance = 0.35; controls.maxDistance = 3;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x404040, 1.2));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera, {left:-.6,right:.6,top:.6,bottom:-.6,near:.1,far:6});
+scene.add(sun, sun.target);
+
+const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(6,6), new THREE.MeshStandardMaterial({color:0x2a2f35, roughness:.95}));
+floorMesh.rotation.x = -Math.PI/2; floorMesh.receiveShadow = true; scene.add(floorMesh);
+const ped = new THREE.Mesh(new THREE.BoxGeometry(PED_HALF*2, PED_TOP, PED_HALF*2), new THREE.MeshStandardMaterial({color:0x8a6a4a, roughness:.7}));
+ped.position.y = PED_TOP/2; ped.castShadow = ped.receiveShadow = true; scene.add(ped);
+const pedEdge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(PED_HALF*2, .001, PED_HALF*2)), new THREE.LineBasicMaterial({color:0xd8c3a5}));
+pedEdge.position.y = PED_TOP+.001; scene.add(pedEdge);
+
+// 構えている物の真下に出す目印（落ちる位置の目安）
+const guide = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0,-1,0)]),
+  new THREE.LineDashedMaterial({color:0x9cf, dashSize:.01, gapSize:.008, transparent:true, opacity:.8}));
+guide.computeLineDistances(); scene.add(guide);
+const ringMark = new THREE.Mesh(new THREE.RingGeometry(.012,.018,24), new THREE.MeshBasicMaterial({color:0x9cf, transparent:true, opacity:.9, side:THREE.DoubleSide}));
+ringMark.rotation.x = -Math.PI/2; scene.add(ringMark);
+
+/* =========================================================
+   物理
+   ========================================================= */
+await RAPIER.init();
+const world = new RAPIER.World({x:0, y:-9.81, z:0});
+const eventQueue = new RAPIER.EventQueue(true);
+const DT = 1/60; world.timestep = DT;
+const colliderToObj = new Map();
+{
+  const fb = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+  const f = world.createCollider(RAPIER.ColliderDesc.cuboid(3, .05, 3).setTranslation(0,-.05,0).setRestitution(floorMat.rest).setFriction(floorMat.fric), fb);
+  colliderToObj.set(f.handle, 'floor');
+  const p = world.createCollider(RAPIER.ColliderDesc.cuboid(PED_HALF, PED_TOP/2, PED_HALF).setTranslation(0,PED_TOP/2,0).setRestitution(pedMat.rest).setFriction(.8), fb);
+  colliderToObj.set(p.handle, 'ped');
+}
+
+/* =========================================================
+   モデルの読み込み
+   ========================================================= */
+const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+let META = [], POOL = [];
+const cache = new Map();   // id → Promise<entry>
+function meshPoints(root){
+  root.updateMatrixWorld(true);
+  const pts = []; const v = new THREE.Vector3();
+  root.traverse(o=>{ if(!o.isMesh) return; const p = o.geometry.attributes.position;
+    const step = Math.max(1, Math.floor(p.count/2000));
+    for (let i=0;i<p.count;i+=step){ v.fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld); pts.push(v.x,v.y,v.z); } });
+  return new Float32Array(pts);
+}
+function loadEntry(meta){
+  if (cache.has(meta.id)) return cache.get(meta.id);
+  const p = loader.loadAsync(glbUrl(meta.id)).then(gltf=>{
+    const root = gltf.scene;
+    root.traverse(o=>{ if(o.isMesh) o.castShadow = o.receiveShadow = true; });
+    const hull = hullFor(meta.id);
+    const points = (hull?.points && hull.points.length >= 12) ? hull.points : meshPoints(root);
+    const box = new THREE.Box3().setFromObject(root);
+    const sz = box.getSize(new THREE.Vector3());
+    const d = decideMat(meta.id, meta.name, meta.category, meta.brand);
+    return {
+      id: meta.id, name: meta.name, mat: d.mat,
+      size: meta.size ?? Math.max(sz.x,sz.y,sz.z),
+      center: box.getCenter(new THREE.Vector3()),
+      mass: OVERRIDES[meta.id]?.mass ?? meta.mass ?? hull?.mass,
+      mesh: () => root.clone(true),
+      collider: () => RAPIER.ColliderDesc.convexHull(points) || RAPIER.ColliderDesc.cuboid(sz.x/2, sz.y/2, sz.z/2),
+    };
+  });
+  p.catch(()=>cache.delete(meta.id));
+  cache.set(meta.id, p);
+  return p;
+}
+// ランダムに1つ選んで読み込む（失敗したら別の物で3回まで）
+async function randomEntry(){
+  for (let i=0;i<3;i++){
+    const meta = POOL[Math.floor(Math.random()*POOL.length)];
+    try { return await loadEntry(meta); } catch(e){ console.warn(e); }
+  }
+  throw new Error('モデルを読み込めませんでした');
+}
+
+/* =========================================================
+   積んだ物
+   ========================================================= */
+const objs = [];
+const _box = new THREE.Box3();
+function spawnBody(entry, pos, quat){
+  const m = MAT[entry.mat];
+  const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
+    .setTranslation(pos.x,pos.y,pos.z).setRotation({x:quat.x,y:quat.y,z:quat.z,w:quat.w})
+    .setCcdEnabled(true).setLinearDamping(.2).setAngularDamping(.6));
+  const cd = entry.collider().setRestitution(Math.min(m.rest,.15)).setFriction(Math.max(m.fric,.8))
+    .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS);
+  if (entry.mass) cd.setMass(clamp(entry.mass, .02, MASS_MAX)); else cd.setDensity(m.density);
+  const col = world.createCollider(cd, body);
+  const o = {entry, mat:entry.mat, size:entry.size, body, col, mesh:held.mesh, pv:{x:0,y:0,z:0}, pw:{x:0,y:0,z:0}};
+  colliderToObj.set(col.handle, o);
+  objs.push(o);
+  return o;
+}
+function clearAll(){
+  for (const o of objs){ colliderToObj.delete(o.col.handle); world.removeRigidBody(o.body); scene.remove(o.mesh); }
+  objs.length = 0;
+}
+// 塔のてっぺん（台の上面からの高さ）と、台から落ちた物があるか
+function measure(){
+  let top = PED_TOP, fallen = null;
+  for (const o of objs){
+    _box.setFromObject(o.mesh);
+    if (_box.max.y < PED_TOP - .005) fallen = fallen || o;     // 全体が台の上面より下 → 落ちた
+    else top = Math.max(top, _box.max.y);
+  }
+  return {top, height: top - PED_TOP, fallen};
+}
+
+/* =========================================================
+   衝突音
+   ========================================================= */
+const tmpV = new THREE.Vector3();
+const panOf = o => { tmpV.copy(o.mesh.position).project(camera); return clamp(tmpV.x,-1,1)*.7; };
+function impactOf(o){
+  const v = o.body.linvel(), w = o.body.angvel();
+  return Math.hypot(v.x-o.pv.x, v.y-o.pv.y, v.z-o.pv.z) + Math.hypot(w.x-o.pw.x, w.y-o.pw.y, w.z-o.pw.z)*o.size*.5;
+}
+const THRESH = .3, COOLDOWN = 70, lastHit = new Map();
+function onContact(a, b){
+  if (typeof a === 'string') [a,b] = [b,a];
+  if (typeof a === 'string') return;
+  const s = Math.max(impactOf(a), typeof b === 'string' ? 0 : impactOf(b));
+  if (s < THRESH) return;
+  const key = typeof b === 'string' ? `${a.col.handle}-${b}` : `${Math.min(a.col.handle,b.col.handle)}-${Math.max(a.col.handle,b.col.handle)}`;
+  const now = performance.now();
+  if (now - (lastHit.get(key)||0) < COOLDOWN) return;
+  lastHit.set(key, now);
+  const base = Math.pow(clamp((s-THRESH)/3, 0, 1), 1.2) * .55;
+  const massAmp = o => clamp(Math.sqrt(o.body.mass()/.3), .35, 1.6);
+  const mA = MAT[a.mat];
+  if (typeof b === 'string'){
+    const surf = b === 'floor' ? floorMat : pedMat;
+    ring(mA, a.size, base*massAmp(a), surf.hard, panOf(a));
+    ring(surf, b === 'floor' ? .12 : .3, base*massAmp(a)*.7, mA.hard, panOf(a));
+  } else {
+    const mB = MAT[b.mat];
+    ring(mA, a.size, base*massAmp(a), mB.hard, panOf(a));
+    ring(mB, b.size, base*massAmp(b), mA.hard, panOf(b));
+  }
+}
+function stepPhysics(){
+  for (const o of objs){ const v=o.body.linvel(), w=o.body.angvel(); o.pv={x:v.x,y:v.y,z:v.z}; o.pw={x:w.x,y:w.y,z:w.z}; }
+  world.step(eventQueue);
+  eventQueue.drainContactForceEvents(e=>{
+    const a = colliderToObj.get(e.collider1()), b = colliderToObj.get(e.collider2());
+    if (a && b) onContact(a,b);
+  });
+}
+
+/* =========================================================
+   ゲームの状態
+   'loading' 次の物を読み込み中 / 'aiming' 構えている / 'settling' 落として揺れが収まるのを待つ / 'over' 終了
+   ========================================================= */
+let state = 'loading';
+let held = null;            // {entry, mesh, quat, x, z}
+let nextP = null, nextEntry = null;
+let towerTop = PED_TOP, bestHeight = 0, bestCount = 0;
+let settleCount = 0, settleTime = 0;
+let turnId = 0;            // 古い読み込みが後から割り込まないための番号
+const placed = [];          // 積めた物の名前
+try { const b = JSON.parse(localStorage.getItem('toybox-tower-best') || 'null'); if (b) { bestHeight = b.height; bestCount = b.count; } } catch(e){}
+
+function updateHud(){
+  const h = (towerTop - PED_TOP)*100;
+  $('hHeight').textContent = `${h.toFixed(1)} cm`;
+  $('hCount').textContent = `${placed.length} 個`;
+  $('hBest').textContent = bestCount ? `ベスト ${(bestHeight*100).toFixed(1)} cm / ${bestCount} 個` : '';
+}
+function setButtons(){
+  const aim = state === 'aiming';
+  $('spinBtn').disabled = $('tipBtn').disabled = $('dropBtn').disabled = !aim;
+  $('hint').textContent = state === 'aiming' ? '物をドラッグして位置を決める' : state === 'settling' ? '揺れが収まるのを待っています…' : state === 'loading' ? '次の物を読み込み中…' : '';
+}
+function prefetchNext(){
+  nextEntry = null;
+  $('nextImg').style.visibility = 'hidden'; $('nextName').textContent = '読み込み中…';
+  nextP = randomEntry().then(e=>{ nextEntry = e; $('nextImg').onload = ()=>$('nextImg').style.visibility = 'visible'; $('nextImg').src = thumbUrl(e.id); $('nextName').textContent = e.name; return e; });
+  nextP.catch(()=>{});
+}
+// 構えている物の高さを、下面が塔のてっぺんより少し上になるように合わせる
+const _q = new THREE.Quaternion();
+function placeHeld(){
+  const m = held.mesh;
+  m.quaternion.copy(held.quat);
+  m.position.set(held.x, 0, held.z);
+  m.updateMatrixWorld(true);
+  _box.setFromObject(m);
+  m.position.y = towerTop + HOLD_GAP - _box.min.y;
+  m.updateMatrixWorld(true);
+  _box.setFromObject(m);
+  const c = _box.getCenter(new THREE.Vector3());
+  // 目印：物の中心の真下
+  guide.position.set(c.x, _box.min.y, c.z);
+  guide.scale.y = _box.min.y;
+  ringMark.position.set(c.x, towerTop + .002, c.z);
+}
+async function nextTurn(){
+  const my = ++turnId;
+  state = 'loading'; setButtons();
+  let e;
+  try { e = await nextP; } catch(err){ if (my !== turnId) return; toast('読み込みに失敗しました。もう一度試します'); prefetchNext(); return nextTurn(); }
+  if (my !== turnId || state !== 'loading') return;
+  prefetchNext();
+  const mesh = e.mesh();
+  mesh.traverse(o=>{ if (o.isMesh){ o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = .85; } });
+  scene.add(mesh);
+  // 最初の向きはスキャンしたときの向き（棚やテーブルに置いた自然な向き）
+  const q = new THREE.Quaternion();
+  held = {entry:e, mesh, quat:q, x:0, z:0};
+  placeHeld();
+  guide.visible = ringMark.visible = true;
+  $('now').textContent = `${e.name}（${MAT[e.mat].label}）`;
+  state = 'aiming'; setButtons();
+}
+function drop(){
+  if (state !== 'aiming') return;
+  const m = held.mesh;
+  m.traverse(o=>{ if (o.isMesh){ o.material.opacity = 1; o.material.transparent = false; } });
+  spawnBody(held.entry, m.position, m.quaternion);
+  guide.visible = ringMark.visible = false;
+  state = 'settling'; settleCount = 0; settleTime = 0; setButtons();
+}
+function rotateHeld(axis, angle){
+  if (state !== 'aiming') return;
+  // カメラから見た軸で回す（「倒す」は画面の奥へ倒れる向き）
+  let ax = axis;
+  if (axis === 'tip'){ const f = new THREE.Vector3(); camera.getWorldDirection(f); f.y = 0; f.normalize(); ax = new THREE.Vector3(-f.z, 0, f.x); }
+  _q.setFromAxisAngle(ax, angle);
+  held.quat.premultiply(_q);
+  placeHeld();
+}
+function checkAfterSettle(){
+  const r = measure();
+  if (r.fallen) return gameOver(r.fallen);
+  placed.push(held.entry.name);
+  towerTop = r.top;
+  updateHud();
+  if (placed.length % 5 === 0) toast(`${placed.length} 個目！ ${(r.height*100).toFixed(1)} cm`);
+  held = null;
+  nextTurn();
+}
+function gameOver(fallenObj){
+  if (state === 'over') return;
+  state = 'over'; setButtons();
+  guide.visible = ringMark.visible = false;
+  const height = towerTop - PED_TOP, count = placed.length;
+  const isBest = count > bestCount || (count === bestCount && height > bestHeight);
+  if (isBest){ bestCount = count; bestHeight = height; try { localStorage.setItem('toybox-tower-best', JSON.stringify({count, height})); } catch(e){} }
+  setTimeout(()=>{
+    $('ovScore').textContent = `${count} 個`;
+    $('ovDetail').innerHTML = `高さ ${(height*100).toFixed(1)} cm${isBest && count ? '　<b>ベスト更新！</b>' : ''}<br>落ちたのは「${esc(fallenObj.entry.name)}」`;
+    $('ovList').innerHTML = placed.map((n,i)=>`<li>${i+1}. ${esc(n)}</li>`).reverse().join('');
+    $('over').style.display = 'flex';
+  }, 1200);
+}
+function restart(){
+  $('over').style.display = 'none';
+  if (held && !objs.some(o=>o.mesh===held.mesh)) scene.remove(held.mesh);
+  held = null; clearAll(); placed.length = 0; towerTop = PED_TOP; updateHud();
+  controls.target.y = PED_TOP + .08;
+  state = 'loading';
+  nextTurn();
+}
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let toastTimer;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.opacity=1; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.style.opacity=0, 2200); }
+
+/* =========================================================
+   操作：構えている物の近くからドラッグ → 水平に動かす / それ以外 → 視点を回す
+   ========================================================= */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+let dragging = null;
+function nearHeld(e){
+  if (state !== 'aiming' || !held) return false;
+  ndc.set(e.clientX/innerWidth*2-1, -(e.clientY/innerHeight)*2+1);
+  ray.setFromCamera(ndc, camera);
+  if (ray.intersectObject(held.mesh, true).length) return true;
+  // 小さい物でもつかみやすいよう、画面上で中心から70px以内ならつかめる
+  _box.setFromObject(held.mesh); const c = _box.getCenter(new THREE.Vector3()).project(camera);
+  return Math.hypot((c.x+1)/2*innerWidth - e.clientX, (1-c.y)/2*innerHeight - e.clientY) < 70;
+}
+renderer.domElement.addEventListener('pointerdown', e=>{
+  if (!nearHeld(e)) return;
+  controls.enabled = false;
+  ndc.set(e.clientX/innerWidth*2-1, -(e.clientY/innerHeight)*2+1);
+  ray.setFromCamera(ndc, camera);
+  plane.constant = -held.mesh.position.y;
+  const p = ray.ray.intersectPlane(plane, new THREE.Vector3());
+  dragging = {id:e.pointerId, off: p ? {x: held.x - p.x, z: held.z - p.z} : {x:0,z:0}};
+  renderer.domElement.setPointerCapture(e.pointerId);
+}, true);
+renderer.domElement.addEventListener('pointermove', e=>{
+  if (!dragging || dragging.id !== e.pointerId || state !== 'aiming') return;
+  ndc.set(e.clientX/innerWidth*2-1, -(e.clientY/innerHeight)*2+1);
+  ray.setFromCamera(ndc, camera);
+  plane.constant = -held.mesh.position.y;
+  const p = ray.ray.intersectPlane(plane, new THREE.Vector3());
+  if (!p) return;
+  const lim = PED_HALF + .12;
+  held.x = clamp(p.x + dragging.off.x, -lim, lim);
+  held.z = clamp(p.z + dragging.off.z, -lim, lim);
+  placeHeld();
+});
+const endDrag = e => { if (dragging && dragging.id === e.pointerId){ dragging = null; controls.enabled = true; } };
+renderer.domElement.addEventListener('pointerup', endDrag);
+renderer.domElement.addEventListener('pointercancel', endDrag);
+
+$('spinBtn').onclick = () => rotateHeld(new THREE.Vector3(0,1,0), Math.PI/4);
+$('tipBtn').onclick  = () => rotateHeld('tip', Math.PI/2);
+$('dropBtn').onclick = drop;
+addEventListener('keydown', e=>{
+  if (e.key === ' ' || e.key === 'Enter') drop();
+  else if (e.key === 'r') rotateHeld(new THREE.Vector3(0,1,0), Math.PI/4);
+  else if (e.key === 't') rotateHeld('tip', Math.PI/2);
+});
+$('retryBtn').onclick = restart;
+addEventListener('resize', ()=>{ camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+/* =========================================================
+   起動
+   ========================================================= */
+const ready = (async () => {
+  [META] = await Promise.all([loadMetadata(), loadHulls()]);
+  POOL = META.filter(m => m.size >= SIZE_MIN && m.size <= SIZE_MAX && !(m.mass > MASS_MAX));
+  prefetchNext();
+})();
+ready.catch(err=>{ console.error(err); toast('データセットの読み込みに失敗しました'); });
+updateHud(); setButtons();
+$('startBtn').onclick = async () => {
+  try { await initAudio(); } catch(e){}
+  $('start').remove();
+  await ready;
+  nextTurn();
+};
+
+// テスト用：ブラウザのコンソールから状態を確認できるようにする
+window.__tower = { objs, measure, get state(){ return state; } };
+
+/* =========================================================
+   メインループ
+   ========================================================= */
+let acc = 0, last = performance.now();
+renderer.setAnimationLoop(now=>{
+  acc += Math.min(.1, (now-last)/1000); last = now;
+  let n = 0;
+  while (acc >= DT && n < 4){
+    stepPhysics(); acc -= DT; n++;
+    if (state === 'settling'){
+      settleTime += DT;
+      const moving = objs.some(o=>{ const v=o.body.linvel(), w=o.body.angvel(); return Math.hypot(v.x,v.y,v.z) > .03 || Math.hypot(w.x,w.y,w.z) > .3; });
+      settleCount = moving ? 0 : settleCount + 1;
+    }
+  }
+  if (n === 4) acc = 0;
+  for (const o of objs){ const p=o.body.translation(), r=o.body.rotation(); o.mesh.position.set(p.x,p.y,p.z); o.mesh.quaternion.set(r.x,r.y,r.z,r.w); }
+  if (state === 'settling' || state === 'aiming' || state === 'loading'){
+    const r = measure();
+    if (r.fallen) gameOver(r.fallen);
+    else if (state === 'settling' && (settleCount >= SETTLE_FRAMES || settleTime > SETTLE_TIMEOUT)) checkAfterSettle();
+  }
+  // カメラは塔の高さに合わせて上がる
+  const ty = Math.max(PED_TOP + .08, towerTop - .05);
+  const dy = (ty - controls.target.y) * .05;
+  controls.target.y += dy; camera.position.y += dy;
+  sun.position.set(.8, towerTop + 1.4, .6); sun.target.position.set(0, towerTop*.5, 0);
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
