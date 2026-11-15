@@ -151,6 +151,17 @@ export function initAudio(){
   return actx.resume();
 }
 export const clamp = (x,a,b)=>Math.min(b,Math.max(a,x));
+
+// 靴が全体の約25%あり、一様ランダムだと出すぎるので重みを下げる（未指定のカテゴリは1）
+export const CATEGORY_WEIGHT = { shoe: 0.25 };
+export function pickWeighted(list){
+  const w = it => CATEGORY_WEIGHT[it.category] ?? 1;
+  let total = 0;
+  for(const it of list) total += w(it);
+  let r = Math.random()*total;
+  for(const it of list){ r -= w(it); if(r < 0) return it; }
+  return list[list.length-1];
+}
 const track = node => { voices++; node.onended = ()=>voices--; };
 
 // 1つの物体（または床）の「鳴り」を発音

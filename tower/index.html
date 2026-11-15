@@ -75,7 +75,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import * as RAPIER_NS from 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/+esm';
-import { glbUrl, thumbUrl, MAT, FLOOR, OVERRIDES, decideMat, loadMetadata, loadHulls, hullFor, initAudio, ring, clamp } from '../common.js';
+import { glbUrl, thumbUrl, MAT, FLOOR, OVERRIDES, decideMat, loadMetadata, loadHulls, hullFor, initAudio, ring, clamp, pickWeighted } from '../common.js';
 const RAPIER = RAPIER_NS.default ?? RAPIER_NS;
 const REST_MIN = () => RAPIER.CoefficientCombineRule.Min;   // 反発係数は「跳ねにくい方」で決まる
 const $ = id => document.getElementById(id);
@@ -200,7 +200,7 @@ function loadEntry(meta){
 // ランダムに1つ選んで読み込む（失敗したら別の物で3回まで）
 async function randomEntry(){
   for (let i=0;i<3;i++){
-    const meta = POOL[Math.floor(Math.random()*POOL.length)];
+    const meta = pickWeighted(POOL);
     try { return await loadEntry(meta); } catch(e){ console.warn(e); }
   }
   throw new Error('モデルを読み込めませんでした');

@@ -88,7 +88,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import * as RAPIER_NS from 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/+esm';
 const RAPIER = RAPIER_NS.default ?? RAPIER_NS;
 const REST_MIN = () => RAPIER.CoefficientCombineRule.Min;   // 反発係数は「跳ねにくい方」で決まる
-import { HF, glbUrl, thumbUrl, MAT, FLOOR, OVERRIDES, decideMat, loadMetadata, loadHulls, hullFor, initAudio, ring, clamp } from './common.js';
+import { HF, glbUrl, thumbUrl, MAT, FLOOR, OVERRIDES, decideMat, loadMetadata, loadHulls, hullFor, initAudio, ring, clamp, pickWeighted } from './common.js';
 
 let floor = FLOOR.woodfloor;   // 今の床
 let META = [];                 // データセットの一覧
@@ -251,7 +251,7 @@ function removeObj(o){
 // mode: ALL=全1,033個から / LOADED=読込済みから / 0以上=読込済みの何番目か
 async function pickEntry(mode){
   if (mode === ALL && META.length){
-    const meta = META[Math.floor(Math.random()*META.length)];
+    const meta = pickWeighted(META);
     try { return await loadModel(meta); }
     catch(err) { console.error(err); toast(`${meta.name} の読み込みに失敗しました`); return undefined; }
   }
