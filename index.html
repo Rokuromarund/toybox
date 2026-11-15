@@ -102,14 +102,16 @@ const thumbUrl = id => `${HF}thumbs/${encodeURIComponent(id)}.webp`;
    modes : [周波数比, 相対振幅]   decay: 余韻(秒)  ring: 共鳴の強さ  noise: 接触ノイズの強さ
    ========================================================= */
 const MAT = {
-  metal:    {label:'金属',     density:300, rest:.35, fric:.4, hard:1.0,  f0:950,  modes:[[1,1],[2.76,.6],[5.40,.4],[8.93,.25]], decay:.9,  ring:1.0, noise:.35},
+  metal:    {label:'金属',     density:1200, rest:.35, fric:.4, hard:1.0,  f0:950,  modes:[[1,1],[2.76,.6],[5.40,.4],[8.93,.25]], decay:.9,  ring:1.0, noise:.35},
   ceramic:  {label:'陶器',     density:750, rest:.25, fric:.5, hard:.9,   f0:1400, modes:[[1,1],[2.32,.55],[4.25,.35],[6.63,.2]], decay:.35, ring:.9,  noise:.45},
   glass:    {label:'ガラス',   density:650, rest:.3,  fric:.35,hard:.95,  f0:1900, modes:[[1,1],[2.61,.6],[4.92,.4],[7.6,.25]],  decay:.6,  ring:.9,  noise:.35},
   wood:     {label:'木',       density:600, rest:.45, fric:.55,hard:.6,   f0:520,  modes:[[1,1],[2.57,.45],[4.2,.2]],            decay:.12, ring:.8,  noise:.6},
   plastic:  {label:'プラスチック',density:200,rest:.4,fric:.45,hard:.5,   f0:720,  modes:[[1,1],[2.3,.4],[3.9,.2]],              decay:.07, ring:.6,  noise:.6},
-  rubber:   {label:'ゴム',     density:900, rest:.85, fric:.9, hard:.15,  f0:220,  modes:[[1,1],[1.8,.3]],                       decay:.05, ring:.4,  noise:.7},
+  hardplastic:{label:'硬いプラスチック・機器',density:500,rest:.35,fric:.45,hard:.75,f0:1100,modes:[[1,1],[2.45,.5],[4.3,.3]],   decay:.1,  ring:.75, noise:.55},
+  shoe:     {label:'靴',       density:350, rest:.3,  fric:.85,hard:.35,  f0:190,  modes:[[1,1],[2.3,.3]],                       decay:.06, ring:.4,  noise:.8},
+  rubber:   {label:'ゴム',     density:900, rest:.5,  fric:.9, hard:.15,  f0:220,  modes:[[1,1],[1.8,.3]],                       decay:.05, ring:.4,  noise:.7},
   cardboard:{label:'紙・段ボール',density:150,rest:.15,fric:.6, hard:.25,  f0:260,  modes:[[1,1],[2.1,.3]],                       decay:.045,ring:.35, noise:.9},
-  fabric:   {label:'布・靴',   density:280, rest:.1,  fric:.8, hard:.1,   f0:160,  modes:[[1,1]],                                decay:.03, ring:.2,  noise:.9},
+  fabric:   {label:'布',       density:280, rest:.1,  fric:.8, hard:.1,   f0:160,  modes:[[1,1]],                                decay:.03, ring:.2,  noise:.9},
 };
 const FLOOR = {
   woodfloor:{label:'木の床',     color:0x8a6a4a, rest:.45, fric:.55, hard:.6,  f0:170, modes:[[1,1],[2.4,.4],[3.9,.2]], decay:.14, ring:.7,  noise:.5},
@@ -118,30 +120,63 @@ const FLOOR = {
 };
 let floor = FLOOR.woodfloor;
 
-// 材質の決め方：①個別指定 → ②名前のキーワード → ③カテゴリ
 const OVERRIDES = {
   // 'オブジェクトID': { mat:'metal', mass:0.35 },   ← 個別に材質や質量(kg)を決めたいときはここに書く
 };
-const KEYWORDS = [
-  [/mug|cup\b|bowl|plate|porcelain|ceramic|teapot|saucer/i,'ceramic'],
-  [/glass|jar\b|vase/i,'glass'],
-  [/\bcan\b|pan\b|\bpot\b|kettle|steel|metal|\btin\b|skillet|spoon|fork|knife|wrench|hammer/i,'metal'],
-  [/shoe|sneaker|boot|slipper|sandal|plush|stuffed|\bbag\b|\bhat\b|sock|glove/i,'fabric'],
-  [/\bbox\b|carton|cereal|book|board_?game|puzzle|card/i,'cardboard'],
-  [/\bball\b|rubber|duck/i,'rubber'],
-  [/wood|block|board\b/i,'wood'],
+// 材質の決め方：①OVERRIDES（個別指定） → ②RULES（名前とブランド。上から順に最初に当たったもの） → ③カテゴリの既定値
+// 靴（category: shoe）は靴専用のルールで判定する
+const SHOE_RULES = [
+  [/\b(sandals?|thong|flip.?flops?|slides?)\b|\bcrocs\b/i, 'rubber'],   // サンダル・クロックス：ゴムのペタッという音
+  [/\bugg\b|slipper|moccasin|\bsock/i, 'fabric'],                          // ムートン・スリッパ：ほぼ無音
+];
+const RULES = [
+  // ── 素材名を含むが、別の物を指す名前（先に除外）
+  [/gun ?metal/i, 'hardplastic'],                                              // 色の名前
+  [/hair (dryer|straightener)|straightener/i, 'hardplastic'],                  // "Ceramic Hair Straightener"
+  [/\bmunchkin\b|\bhefty\b|kotobuki/i, 'plastic'],                             // "Arm Hammer Diaper Pail…" など
+  [/sea to summit/i, 'rubber'],                                                 // シリコンの折りたたみボウル
+  [/dixie|\bpaper\b(?! mario)|parchment|google cardboard/i, 'cardboard'],
+  // ── 素材名がはっきり書いてある
+  [/\bporcelain\b|\bceramic\b|stoneware|terra ?cotta|\bglazed\b|corningware/i, 'ceramic'],
+  [/\bplastic\b/i, 'plastic'],
+  [/stainless|cast iron|\bbrass\b|alumin(i)?um|\bmetal\b|\biron\b/i, 'metal'],
+  [/\bfelt\b|\bplush\b|teddy|fabric|towels?\b|dishtowel|washcloth|bath sheet|thinsulate|\bfoam\b|sootheze/i, 'fabric'],
+  [/\bwood(en|an)?\b|bamboo|sushi mat|bookend|cutlery block|\bblocks?\b|woven|wicker|\bbasket\b|honey dipper/i, 'wood'],
+  [/\brubber\b|silicone|\bgloves?\b|antislip|teething|\bkong\b|squirtin/i, 'rubber'],
+  // ── ブランド（ほぼ全部が同じ素材）
+  [/plantoys|melissa|granimals/i, 'wood'],                                      // 木のおもちゃ
+  [/ecoforms/i, 'hardplastic'],                                                  // 植物繊維を固めた鉢
+  [/jarrow|twinlab|perricone|marc anthony|phillips|just for men/i, 'plastic'],  // ボトル・容器入り
+  [/wildkin|olive kids|jansport|embark/i, 'fabric'],                            // 布のバッグ・ランチボックス
+  // ── 物の種類
+  [/\bglass\b|instant coffee|\bsyrup\b|\btonic\b|light bulbs?/i, 'glass'],
+  [/\b(fry ?pan|frypan|cake pan|bundt pan|pan set)\b|can opener|\bhammer\b|screwdriver|scissors|\bclamp\b|\bbell\b|toaster|pressure cooker|herring|hard drive|\bhdd\b|wall mount|alarm clock/i, 'metal'],
+  [/\bmug\b|\bplates?\b|ramekin|teapot|pitcher|casserole|butter dish|\bsaucer\b|\bbowl\b|soap dish|spoon rest|utensil holder|\b(flower|orchid|electric) pot\b|planter/i, 'ceramic'],
+  [/\[dvd\]|\bdvd\b|\bdiscs?\b|\[(nintendo|wii)[^\]]*\]|\bds game\b/i, 'plastic'],                       // ディスク・ゲームソフトのケース
+  [/nintendo 64|super nintendo|game boy|\b[23]ds\b|keyboard|\bmouse\b(?! mat)|router|headset|speaker|cartridges?|toner|motherboard|tablet|notebook|\byoga\b|camera|\blens\b|\busb\b|portable drive|storage|flashlight|toothbrush|\br7\b|simon swipe|paint maker|coffeemaker|labelworks/i, 'hardplastic'],
+  [/mouse mat|drying mat|armband|\bbib\b|\bhat\b|\bpads?\b|tampons|liners|sponges|snack bags|neck rest/i, 'fabric'],
+  [/\bcable\b|\bcord\b|activity tracker|\btape\b/i, 'rubber'],
+  [/\bcans\b|\b12 ?(pk|ct|pack)\b|pepsi|fresca|k-cups?|advent calendar|creationary|\bbook\b|eat to live|crayons|chalk|\bbox\b|cereal|crackers|candy|snacks|music studio|\bloops\b|subscription|instax|label|model magic|card game|card & invitation|cocoa|coffee/i, 'cardboard'],
+  [/bottles?|supplements?|capsules?|\bcaps\b|caplets|probiotic|softener|laxative|liquid|serum|cream|lotion|cleanser|moisturizer|conditioner|treatment|\boil\b|whey|protein|powder|canister|sparkling water/i, 'plastic'],
 ];
 const CATEGORY_MAT = {
-  'shoe':'fabric','clothing':'fabric','bag':'fabric',
-  'toy':'plastic','household':'plastic','electronics':'plastic','health and beauty':'plastic',
-  'baby gear':'plastic','other':'plastic','bottles and cups':'plastic',
-  'kitchen':'ceramic','food and drink':'cardboard','board game':'cardboard','media':'cardboard',
+  'shoe':'shoe', 'clothing':'fabric', 'bag':'fabric',
+  'toy':'plastic', 'household':'plastic', 'electronics':'hardplastic', 'health and beauty':'plastic',
+  'baby gear':'plastic', 'other':'plastic', 'bottles and cups':'plastic',
+  'kitchen':'plastic', 'food and drink':'cardboard', 'board game':'cardboard', 'media':'plastic',
 };
-function decideMat(id, name, category){
-  if (OVERRIDES[id]?.mat) return OVERRIDES[id].mat;
-  const kw = KEYWORDS.find(([re])=>re.test(`${id} ${name}`));
-  if (kw) return kw[1];
-  return CATEGORY_MAT[(category||'').toLowerCase()] || 'plastic';
+function decideMat(id, name, category, brand){
+  if (OVERRIDES[id]?.mat) return {mat: OVERRIDES[id].mat, why: '個別指定'};
+  const text = `${name} ${brand || ''}`;
+  const cat = (category || '').toLowerCase();
+  const rules = cat === 'shoe' ? SHOE_RULES : RULES;
+  for (const [re, mat] of rules){
+    const m = text.match(re);
+    if (m) return {mat, why: `名前「${m[0]}」`};
+  }
+  // 靴カテゴリ以外に紛れ込んだ靴
+  if (cat !== 'shoe' && /\b(shoe|boot|sneaker)s?\b/i.test(text)) return {mat:'shoe', why:'名前（靴）'};
+  return {mat: CATEGORY_MAT[cat] || 'plastic', why: `カテゴリ「${category || '-'}」`};
 }
 
 /* =========================================================
@@ -269,11 +304,12 @@ function loadModel(meta){
     root.traverse(o=>{ if(o.isMesh){ o.castShadow = o.receiveShadow = true; } });
     const hull = hullFor(meta.id);
     const points = (hull?.points && hull.points.length >= 12) ? hull.points : meshPoints(root);
+    const decided = decideMat(meta.id, meta.name, meta.category, meta.brand);
     const sz = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3());
     const size = meta.size ?? Math.max(sz.x, sz.y, sz.z);
     const entry = {
       id: meta.id, name: meta.name, category: meta.category,
-      mat: decideMat(meta.id, meta.name, meta.category),
+      mat: decided.mat, matWhy: decided.why,
       size,
       datasetMass: OVERRIDES[meta.id]?.mass ?? meta.mass ?? hull?.mass,
       hullSource: hull?.points ? 'データセットの凸包' : 'メッシュから計算',
@@ -529,7 +565,7 @@ renderer.domElement.addEventListener('pointerup', e=>{
 function showInfo(o){
   const m = MAT[o.mat];
   document.getElementById('info').innerHTML =
-    `<b>${esc(o.name)}</b><br>カテゴリ: ${esc(o.entry.category||'-')}<br>材質: ${m.label}<br>` +
+    `<b>${esc(o.name)}</b><br>カテゴリ: ${esc(o.entry.category||'-')}<br>材質: ${m.label}（判定: ${esc(o.entry.matWhy)}）<br>` +
     `質量: ${(o.body.mass()*1000).toFixed(0)} g<br>大きさ: ${(o.size*100).toFixed(1)} cm<br>` +
     `硬さ ${m.hard} / 反発 ${m.rest} / 摩擦 ${m.fric}<br>当たり判定: ${o.entry.hullSource}`;
 }
