@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>物理音シミュレーター</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#1d2126;font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif;color:#eee;touch-action:none}
+  canvas{display:block}
+  button,select,input{font:inherit}
+  #info{position:fixed;left:8px;top:8px;background:rgba(0,0,0,.55);padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.5;max-width:60vw;pointer-events:none}
+  #info b{font-size:13px}
+  #bar{position:fixed;left:0;right:0;bottom:0;display:flex;flex-wrap:wrap;gap:6px;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:rgba(0,0,0,.6);justify-content:center}
+  #bar button,#bar select{font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid #556;background:#2b3138;color:#eee;max-width:44vw}
+  #bar .primary{background:#3a6fd8;border-color:#3a6fd8}
+  #start{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,12,15,.88);z-index:10;text-align:center;padding:20px;gap:12px}
+  #start button{font-size:18px;padding:12px 28px;border-radius:12px;border:none;background:#4a8cff;color:#fff}
+  #start p{font-size:13px;color:#bbb;max-width:340px;line-height:1.6;margin:0}
+  #toast{position:fixed;left:50%;top:12px;transform:translateX(-50%);background:#222d;padding:6px 12px;border-radius:8px;font-size:12px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:20;max-width:90vw}
+  #credit{position:fixed;right:8px;top:8px;font-size:10px;color:#9aa;text-align:right}
+  #credit a{color:#9cf}
+  /* モデル選択パネル */
+  #picker{position:fixed;inset:0;background:#15181cf2;z-index:8;display:none;flex-direction:column}
+  #picker.open{display:flex}
+  #pkHead{display:flex;gap:6px;padding:10px;flex-wrap:wrap;align-items:center}
+  #pkHead input,#pkHead select{padding:7px 9px;border-radius:8px;border:1px solid #556;background:#2b3138;color:#eee;font-size:14px}
+  #pkHead input{flex:1;min-width:120px}
+  #pkHead button{padding:7px 12px;border-radius:8px;border:none;background:#555;color:#fff}
+  #pkCount{font-size:11px;color:#9aa;padding:0 12px 6px}
+  #grid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;padding:0 10px 20px;touch-action:pan-y}
+  .cell{background:#22272d;border-radius:8px;padding:4px;font-size:10px;line-height:1.3;color:#ccc;text-align:center;cursor:pointer;border:2px solid transparent}
+  .cell img{width:100%;aspect-ratio:1;object-fit:contain;background:#2e343b;border-radius:6px;display:block}
+  .cell .nm{height:2.6em;overflow:hidden;margin-top:3px}
+  .cell.loaded{border-color:#3a6fd8}
+  #more{margin:8px auto 20px;grid-column:1/-1;padding:8px 16px;border-radius:8px;border:none;background:#3a6fd8;color:#fff}
+</style>
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<div id="start">
+  <button id="startBtn">タップして開始</button>
+  <p>床をタップ → 選んでいる物を落とす<br>物体をタップ → つついて跳ね上げる<br>ドラッグ → 視点を回す／2本指で拡大</p>
+  <p>「モデルを選ぶ」から Google Scanned Objects の1,033個の中から選べます（その場でダウンロードされます）。</p>
+</div>
+<div id="info"><b>物理音シミュレーター</b><br>物体をタップすると詳細を表示</div>
+<div id="credit">3D models: <a href="https://huggingface.co/datasets/codepawl/scanned-objects-glb" target="_blank">Google Scanned Objects</a><br>by Google Research, CC BY 4.0</div>
+<div id="toast"></div>
+
+<div id="picker">
+  <div id="pkHead">
+    <input id="pkSearch" type="search" placeholder="名前・ブランドで検索（英語）">
+    <select id="pkCat"><option value="">全カテゴリ</option></select>
+    <button id="pkClose">閉じる</button>
+  </div>
+  <div id="pkCount"></div>
+  <div id="grid"></div>
+</div>
+
+<div id="bar">
+  <button id="openPicker" class="primary">モデルを選ぶ</button>
+  <select id="pick"></select>
+  <button id="dropBtn">落とす</button>
+  <button id="rainBtn">×8</button>
+  <select id="floorSel">
+    <option value="woodfloor">床: 木</option>
+    <option value="concrete">床: コンクリート</option>
+    <option value="carpet">床: カーペット</option>
+  </select>
+  <select id="massSel">
+    <option value="dataset">質量: データセット推定</option>
+    <option value="material">質量: 材質の密度から</option>
+  </select>
+  <button id="clearBtn">消す</button>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import * as RAPIER_NS from 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/+esm';
+const RAPIER = RAPIER_NS.default ?? RAPIER_NS;
+
+/* =========================================================
+   0. データの場所（Hugging Face から直接読み込む）
+   ========================================================= */
+const HF = 'https://huggingface.co/datasets/codepawl/scanned-objects-glb/resolve/main/';
+const glbUrl   = id => `${HF}objects/${encodeURIComponent(id)}/${encodeURIComponent(id)}.glb`;
+const thumbUrl = id => `${HF}thumbs/${encodeURIComponent(id)}.webp`;
+
+/* =========================================================
+   1. 材質テーブル
+   density : 実効密度 kg/m³（中空の物体は低め）
+   rest/fric : 反発係数 / 摩擦係数
+   hard  : 硬さ 0〜1
+   f0    : 基準周波数（大きさ0.12mのとき。大きい物ほど低くなる）
+   modes : [周波数比, 相対振幅]   decay: 余韻(秒)  ring: 共鳴の強さ  noise: 接触ノイズの強さ
+   ========================================================= */
+const MAT = {
+  metal:    {label:'金属',     density:300, rest:.35, fric:.4, hard:1.0,  f0:950,  modes:[[1,1],[2.76,.6],[5.40,.4],[8.93,.25]], decay:.9,  ring:1.0, noise:.35},
+  ceramic:  {label:'陶器',     density:750, rest:.25, fric:.5, hard:.9,   f0:1400, modes:[[1,1],[2.32,.55],[4.25,.35],[6.63,.2]], decay:.35, ring:.9,  noise:.45},
+  glass:    {label:'ガラス',   density:650, rest:.3,  fric:.35,hard:.95,  f0:1900, modes:[[1,1],[2.61,.6],[4.92,.4],[7.6,.25]],  decay:.6,  ring:.9,  noise:.35},
+  wood:     {label:'木',       density:600, rest:.45, fric:.55,hard:.6,   f0:520,  modes:[[1,1],[2.57,.45],[4.2,.2]],            decay:.12, ring:.8,  noise:.6},
+  plastic:  {label:'プラスチック',density:200,rest:.4,fric:.45,hard:.5,   f0:720,  modes:[[1,1],[2.3,.4],[3.9,.2]],              decay:.07, ring:.6,  noise:.6},
+  rubber:   {label:'ゴム',     density:900, rest:.85, fric:.9, hard:.15,  f0:220,  modes:[[1,1],[1.8,.3]],                       decay:.05, ring:.4,  noise:.7},
+  cardboard:{label:'紙・段ボール',density:150,rest:.15,fric:.6, hard:.25,  f0:260,  modes:[[1,1],[2.1,.3]],                       decay:.045,ring:.35, noise:.9},
+  fabric:   {label:'布・靴',   density:280, rest:.1,  fric:.8, hard:.1,   f0:160,  modes:[[1,1]],                                decay:.03, ring:.2,  noise:.9},
+};
+const FLOOR = {
+  woodfloor:{label:'木の床',     color:0x8a6a4a, rest:.45, fric:.55, hard:.6,  f0:170, modes:[[1,1],[2.4,.4],[3.9,.2]], decay:.14, ring:.7,  noise:.5},
+  concrete: {label:'コンクリート',color:0x8c8f93, rest:.35, fric:.7,  hard:1.0, f0:120, modes:[[1,1],[3.1,.2]],          decay:.04, ring:.25, noise:1.0},
+  carpet:   {label:'カーペット', color:0x6b3b3b, rest:.05, fric:1.0, hard:.05, f0:90,  modes:[[1,1]],                   decay:.02, ring:.1,  noise:.5},
+};
+let floor = FLOOR.woodfloor;
+
+// 材質の決め方：①個別指定 → ②名前のキーワード → ③カテゴリ
+const OVERRIDES = {
+  // 'オブジェクトID': { mat:'metal', mass:0.35 },   ← 個別に材質や質量(kg)を決めたいときはここに書く
+};
+const KEYWORDS = [
+  [/mug|cup\b|bowl|plate|porcelain|ceramic|teapot|saucer/i,'ceramic'],
+  [/glass|jar\b|vase/i,'glass'],
+  [/\bcan\b|pan\b|\bpot\b|kettle|steel|metal|\btin\b|skillet|spoon|fork|knife|wrench|hammer/i,'metal'],
+  [/shoe|sneaker|boot|slipper|sandal|plush|stuffed|\bbag\b|\bhat\b|sock|glove/i,'fabric'],
+  [/\bbox\b|carton|cereal|book|board_?game|puzzle|card/i,'cardboard'],
+  [/\bball\b|rubber|duck/i,'rubber'],
+  [/wood|block|board\b/i,'wood'],
+];
+const CATEGORY_MAT = {
+  'shoe':'fabric','clothing':'fabric','bag':'fabric',
+  'toy':'plastic','household':'plastic','electronics':'plastic','health and beauty':'plastic',
+  'baby gear':'plastic','other':'plastic','bottles and cups':'plastic',
+  'kitchen':'ceramic','food and drink':'cardboard','board game':'cardboard','media':'cardboard',
+};
+function decideMat(id, name, category){
+  if (OVERRIDES[id]?.mat) return OVERRIDES[id].mat;
+  const kw = KEYWORDS.find(([re])=>re.test(`${id} ${name}`));
+  if (kw) return kw[1];
+  return CATEGORY_MAT[(category||'').toLowerCase()] || 'plastic';
+}
+
+/* =========================================================
+   2. 描画（Three.js）
+   ========================================================= */
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1d2126);
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.01, 50);
+camera.position.set(0.8, 0.7, 1.0);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.05, 0);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI*0.48;
+controls.minDistance = 0.2; controls.maxDistance = 4;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x404040, 1.2));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+sun.position.set(0.8, 1.6, 0.6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera, {left:-.8,right:.8,top:.8,bottom:-.8,near:.1,far:5});
+scene.add(sun);
+
+const AREA = 0.6; // 床の半分の幅（m）
+const floorMesh = new THREE.Mesh(new THREE.BoxGeometry(AREA*2, 0.02, AREA*2), new THREE.MeshStandardMaterial({color:floor.color, roughness:.8}));
+floorMesh.position.y = -0.01; floorMesh.receiveShadow = true; scene.add(floorMesh);
+const rimMat = new THREE.MeshStandardMaterial({color:0x444a52, roughness:.7});
+
+/* =========================================================
+   3. 物理（Rapier）
+   ========================================================= */
+await RAPIER.init();
+const world = new RAPIER.World({x:0, y:-9.81, z:0});
+const eventQueue = new RAPIER.EventQueue(true);
+const DT = 1/60; world.timestep = DT;
+
+const colliderToObj = new Map();   // collider handle → 物体 or 'floor'
+const floorColliders = [];
+{
+  const fb = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+  const add = (hx,hy,hz,x,y,z,visible) => {
+    const c = world.createCollider(RAPIER.ColliderDesc.cuboid(hx,hy,hz).setTranslation(x,y,z).setRestitution(floor.rest).setFriction(floor.fric), fb);
+    colliderToObj.set(c.handle,'floor'); floorColliders.push(c);
+    if (visible) { const m = new THREE.Mesh(new THREE.BoxGeometry(hx*2,hy*2,hz*2), rimMat); m.position.set(x,y,z); m.castShadow = m.receiveShadow = true; scene.add(m); }
+  };
+  add(AREA, 0.05, AREA, 0, -0.05, 0, false);           // 床
+  const h=0.04, t=0.01;                                 // 縁
+  add(AREA+t, h, t, 0, h,  AREA+t, true);
+  add(AREA+t, h, t, 0, h, -AREA-t, true);
+  add(t, h, AREA, AREA+t, h, 0, true);
+  add(t, h, AREA, -AREA-t, h, 0, true);
+}
+
+/* =========================================================
+   4. データセットの読み込み（メタデータ・凸包）
+   ========================================================= */
+let META = [];            // {id,name,category,brand,size,mass}
+let HULLS = null;         // collision_hulls.json（構造に依存しないよう緩く読む）
+
+const num = v => (typeof v === 'number' && isFinite(v)) ? v : undefined;
+async function loadMetadata(){
+  const res = await fetch(HF + 'metadata.jsonl');
+  if (!res.ok) throw new Error('metadata ' + res.status);
+  const text = await res.text();
+  META = text.split('\n').filter(l=>l.trim()).map(l=>{
+    const r = JSON.parse(l);
+    const id = r.id ?? r.object_id ?? r.name;
+    const dims = [num(r.width_m), num(r.height_m), num(r.depth_m)].filter(x=>x!==undefined);
+    return {
+      id, name: r.name ?? id, category: r.category ?? r.shelf_category ?? '', brand: r.brand ?? '',
+      size: dims.length ? Math.max(...dims) : undefined,
+      mass: num(r.mass_estimate_kg) ?? num(r.mass_kg) ?? num(r.mass),
+    };
+  }).filter(m=>m.id);
+}
+async function loadHulls(){
+  try {
+    const res = await fetch(HF + 'collision_hulls.json');
+    if (res.ok) HULLS = await res.json();
+  } catch(e) { console.warn('hulls', e); }
+}
+function flatPts(p){
+  if (!p || !p.length) return null;
+  return new Float32Array(typeof p[0] === 'number' ? p : p.flat());
+}
+function hullFor(id){
+  if (!HULLS) return null;
+  const list = Array.isArray(HULLS) ? HULLS : Array.isArray(HULLS.objects) ? HULLS.objects : Array.isArray(HULLS.hulls) ? HULLS.hulls : null;
+  let e = list ? list.find(x=>x.id===id || x.name===id) : (HULLS[id] ?? HULLS.objects?.[id] ?? HULLS.hulls?.[id]);
+  if (!e) return null;
+  if (Array.isArray(e)) return {points: flatPts(e)};
+  return {points: flatPts(e.points ?? e.hull ?? e.vertices ?? e.verts), mass: num(e.mass_estimate_kg) ?? num(e.mass_kg)};
+}
+
+/* =========================================================
+   5. GLB を URL から読み込んでカタログに登録
+   ========================================================= */
+const loader = new GLTFLoader();
+loader.setMeshoptDecoder(MeshoptDecoder);
+const catalog = [];                 // 読み込み済みの物体
+const loading = new Map();          // id → Promise<entry>
+
+function meshPoints(root){
+  root.updateMatrixWorld(true);
+  let total = 0; root.traverse(o=>{ if(o.isMesh) total += o.geometry.attributes.position.count; });
+  const stride = Math.max(1, Math.floor(total/3000));
+  const pts = []; const v = new THREE.Vector3(); let k = 0;
+  root.traverse(o=>{ if(!o.isMesh) return;
+    const p = o.geometry.attributes.position;
+    for (let i=0;i<p.count;i++){ if((k++)%stride) continue; v.fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld); pts.push(v.x,v.y,v.z); }
+  });
+  return new Float32Array(pts);
+}
+function loadModel(meta){
+  if (loading.has(meta.id)) return loading.get(meta.id);
+  const p = loader.loadAsync(glbUrl(meta.id)).then(gltf=>{
+    const root = gltf.scene;
+    root.traverse(o=>{ if(o.isMesh){ o.castShadow = o.receiveShadow = true; } });
+    const hull = hullFor(meta.id);
+    const points = (hull?.points && hull.points.length >= 12) ? hull.points : meshPoints(root);
+    const sz = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3());
+    const size = meta.size ?? Math.max(sz.x, sz.y, sz.z);
+    const entry = {
+      id: meta.id, name: meta.name, category: meta.category,
+      mat: decideMat(meta.id, meta.name, meta.category),
+      size,
+      datasetMass: OVERRIDES[meta.id]?.mass ?? meta.mass ?? hull?.mass,
+      hullSource: hull?.points ? 'データセットの凸包' : 'メッシュから計算',
+      mesh: () => root.clone(true),
+      collider: () => RAPIER.ColliderDesc.convexHull(points) || RAPIER.ColliderDesc.ball(size/2),
+    };
+    catalog.push(entry); refreshPick(entry);
+    markLoaded(meta.id);
+    return entry;
+  });
+  p.catch(()=>loading.delete(meta.id));
+  loading.set(meta.id, p);
+  return p;
+}
+
+const pickSel = document.getElementById('pick');
+function refreshPick(select){
+  pickSel.innerHTML = '<option value="-1">ランダム（読込済み）</option>' +
+    catalog.map((c,i)=>`<option value="${i}">${c.name.slice(0,28)}</option>`).join('');
+  if (select) pickSel.value = catalog.indexOf(select);
+}
+refreshPick();
+
+/* =========================================================
+   6. 生成・削除
+   ========================================================= */
+const objs = [];
+const MAX_OBJS = 40;
+let massMode = 'dataset';
+function spawn(entry, pos){
+  const m = MAT[entry.mat];
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random()*6.28, Math.random()*6.28, Math.random()*6.28));
+  const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
+    .setTranslation(pos.x,pos.y,pos.z).setRotation({x:q.x,y:q.y,z:q.z,w:q.w})
+    .setCcdEnabled(true).setLinearDamping(.05).setAngularDamping(.15));
+  const cd = entry.collider().setRestitution(m.rest).setFriction(m.fric)
+    .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS);
+  if (massMode === 'dataset' && entry.datasetMass) cd.setMass(entry.datasetMass);
+  else cd.setDensity(m.density);
+  const col = world.createCollider(cd, body);
+  const mesh = entry.mesh();
+  const obj = {entry, name:entry.name, mat:entry.mat, size:entry.size, body, col, mesh, pv:{x:0,y:0,z:0}, pw:{x:0,y:0,z:0}};
+  mesh.userData.obj = obj;
+  scene.add(mesh);
+  colliderToObj.set(col.handle, obj);
+  objs.push(obj);
+  if (objs.length > MAX_OBJS) removeObj(objs[0]);
+  return obj;
+}
+function removeObj(o){
+  colliderToObj.delete(o.col.handle);
+  world.removeRigidBody(o.body);
+  scene.remove(o.mesh);
+  objs.splice(objs.indexOf(o),1);
+}
+function pickEntry(){
+  if (!catalog.length) return null;
+  const i = +pickSel.value;
+  return catalog[i >= 0 ? i : Math.floor(Math.random()*catalog.length)];
+}
+const rnd = r => (Math.random()*2-1)*r;
+const dropAt = (x,z) => { const e = pickEntry(); if (!e) { toast('先に「モデルを選ぶ」から物体を選んでください'); return; } spawn(e, {x, y:Math.max(.4, e.size+.2), z}); };
+document.getElementById('dropBtn').onclick = () => dropAt(rnd(.15), rnd(.15));
+document.getElementById('rainBtn').onclick = () => { for(let i=0;i<8;i++) setTimeout(()=>dropAt(rnd(.3), rnd(.3)), i*150); };
+document.getElementById('clearBtn').onclick = () => { while(objs.length) removeObj(objs[0]); };
+document.getElementById('floorSel').onchange = e => {
+  floor = FLOOR[e.target.value];
+  floorMesh.material.color.setHex(floor.color);
+  floorColliders.forEach(c=>{ c.setRestitution(floor.rest); c.setFriction(floor.fric); });
+  toast(`床を「${floor.label}」に変更`);
+};
+document.getElementById('massSel').onchange = e => { massMode = e.target.value; toast('次に落とす物から反映されます'); };
+
+/* =========================================================
+   7. モデル選択パネル
+   ========================================================= */
+const picker = document.getElementById('picker'), grid = document.getElementById('grid');
+const pkSearch = document.getElementById('pkSearch'), pkCat = document.getElementById('pkCat');
+const PAGE = 60; let shown = 0, filtered = [];
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function applyFilter(){
+  const q = pkSearch.value.trim().toLowerCase(), c = pkCat.value;
+  filtered = META.filter(m => (!c || m.category===c) && (!q || `${m.id} ${m.name} ${m.brand}`.toLowerCase().includes(q)));
+  grid.innerHTML = ''; shown = 0; showMore();
+}
+function showMore(){
+  document.getElementById('more')?.remove();
+  const html = filtered.slice(shown, shown+PAGE).map(m=>
+    `<div class="cell${loading.has(m.id)?' loaded':''}" data-id="${esc(m.id)}"><img loading="lazy" src="${thumbUrl(m.id)}" alt=""><div class="nm">${esc(m.name)}</div></div>`).join('');
+  grid.insertAdjacentHTML('beforeend', html);
+  shown += PAGE;
+  document.getElementById('pkCount').textContent = `${filtered.length} 件` + (filtered.length > shown ? `（${shown} 件表示中）` : '');
+  if (filtered.length > shown) grid.insertAdjacentHTML('beforeend', '<button id="more">もっと見る</button>');
+}
+function markLoaded(id){ grid.querySelector(`.cell[data-id="${CSS.escape(id)}"]`)?.classList.add('loaded'); }
+grid.addEventListener('click', async e=>{
+  if (e.target.id === 'more') { showMore(); return; }
+  const cell = e.target.closest('.cell'); if (!cell) return;
+  const meta = META.find(m=>m.id===cell.dataset.id);
+  picker.classList.remove('open');
+  toast(`${meta.name} を読み込み中…`);
+  try {
+    const entry = await loadModel(meta);
+    refreshPick(entry);
+    spawn(entry, {x:rnd(.1), y:Math.max(.4, entry.size+.2), z:rnd(.1)});
+    toast(`${entry.name}：${MAT[entry.mat].label}として配置`);
+  } catch(err) { console.error(err); toast(`${meta.name} の読み込みに失敗しました`); }
+});
+pkSearch.addEventListener('input', applyFilter);
+pkCat.addEventListener('change', applyFilter);
+document.getElementById('openPicker').onclick = () => { if (!META.length) { toast('一覧を読み込み中です'); return; } picker.classList.add('open'); };
+document.getElementById('pkClose').onclick = () => picker.classList.remove('open');
+
+/* =========================================================
+   8. 音（Web Audio・モーダル合成）
+   ========================================================= */
+let actx = null, master = null, noiseBuf = null, voices = 0;
+const MAX_VOICES = 32;
+function initAudio(){
+  actx = new (window.AudioContext||window.webkitAudioContext)();
+  const comp = actx.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.ratio.value = 6;
+  master = actx.createGain(); master.gain.value = .9;
+  master.connect(comp).connect(actx.destination);
+  noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
+  const d = noiseBuf.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+  return actx.resume();
+}
+const clamp = (x,a,b)=>Math.min(b,Math.max(a,x));
+const track = node => { voices++; node.onended = ()=>voices--; };
+
+// 1つの物体（または床）の「鳴り」を発音
+function ring(mat, size, amp, strikerHard, pan){
+  if (!actx || voices > MAX_VOICES || amp < .002) return;
+  const t = actx.currentTime;
+  const out = actx.createStereoPanner(); out.pan.value = pan; out.connect(master);
+  const f0 = clamp(mat.f0 * Math.pow(.12/size, .8), 45, 6000);
+  const contact = Math.min(mat.hard, strikerHard);          // 柔らかい方が接触の質を決める
+  const bright = .2 + .8*strikerHard;                         // 柔らかい相手だと高次モードが出にくい
+  const lenScale = clamp(size/.12, .5, 2.2);
+  mat.modes.forEach(([r,a],i)=>{
+    const f = f0*r*(1+(Math.random()-.5)*.03);
+    if (f > 15000) return;
+    const peak = amp*a*mat.ring*Math.pow(bright,i);
+    if (peak < .001) return;
+    const dec = mat.decay*lenScale/(1+i*.6);
+    const o = actx.createOscillator(); o.frequency.value = f;
+    const g = actx.createGain();
+    g.gain.setValueAtTime(.0001,t);
+    g.gain.exponentialRampToValueAtTime(peak, t+.002);
+    g.gain.exponentialRampToValueAtTime(.0001, t+dec);
+    o.connect(g).connect(out); o.start(t); o.stop(t+dec+.05); track(o);
+  });
+  const n = actx.createBufferSource(); n.buffer = noiseBuf;
+  const lp = actx.createBiquadFilter(); lp.type='lowpass';
+  lp.frequency.value = 180 + 9000*Math.pow(contact,1.5);
+  const ng = actx.createGain();
+  const nd = .012 + .07*(1-contact);
+  ng.gain.setValueAtTime(Math.max(.0002, amp*mat.noise*.8), t);
+  ng.gain.exponentialRampToValueAtTime(.0001, t+nd);
+  n.connect(lp).connect(ng).connect(out);
+  n.start(t, Math.random()*.8); n.stop(t+nd+.02); track(n);
+}
+
+const tmpV = new THREE.Vector3();
+const panOf = o => { tmpV.copy(o.mesh.position).project(camera); return clamp(tmpV.x,-1,1)*.7; };
+// 衝撃の強さ = このステップで速度がどれだけ急に変わったか（m/s）
+function impactOf(o){
+  const v = o.body.linvel(), w = o.body.angvel();
+  const dv = Math.hypot(v.x-o.pv.x, v.y-o.pv.y, v.z-o.pv.z);
+  const dw = Math.hypot(w.x-o.pw.x, w.y-o.pw.y, w.z-o.pw.z);
+  return dv + dw*o.size*.5;
+}
+const THRESH = .35;          // 静止接触（重力ぶん≈0.16）を拾わないしきい値
+const COOLDOWN = 70;         // 同じペアの連続発音を抑える(ms)
+const lastHit = new Map();
+function onContact(a, b){
+  if (a==='floor' && b==='floor') return;
+  if (a==='floor') [a,b] = [b,a];
+  const s = Math.max(impactOf(a), b==='floor' ? 0 : impactOf(b));
+  if (s < THRESH) return;
+  const key = b==='floor' ? `${a.col.handle}-f` : `${Math.min(a.col.handle,b.col.handle)}-${Math.max(a.col.handle,b.col.handle)}`;
+  const now = performance.now();
+  if (now - (lastHit.get(key)||0) < COOLDOWN) return;
+  lastHit.set(key, now);
+  const base = Math.pow(clamp((s-THRESH)/3, 0, 1), 1.2) * .55;
+  const massAmp = o => clamp(Math.sqrt(o.body.mass()/.3), .35, 1.6);
+  const mA = MAT[a.mat];
+  if (b==='floor'){
+    ring(mA, a.size, base*massAmp(a), floor.hard, panOf(a));
+    ring(floor, .12, base*massAmp(a)*.7, mA.hard, panOf(a));
+  } else {
+    const mB = MAT[b.mat];
+    ring(mA, a.size, base*massAmp(a), mB.hard, panOf(a));
+    ring(mB, b.size, base*massAmp(b), mA.hard, panOf(b));
+  }
+}
+
+function stepPhysics(){
+  for (const o of objs){ const v=o.body.linvel(), w=o.body.angvel(); o.pv={x:v.x,y:v.y,z:v.z}; o.pw={x:w.x,y:w.y,z:w.z}; }
+  world.step(eventQueue);
+  eventQueue.drainContactForceEvents(e=>{
+    const a = colliderToObj.get(e.collider1()), b = colliderToObj.get(e.collider2());
+    if (a && b) onContact(a,b);
+  });
+  for (let i=objs.length-1;i>=0;i--) if (objs[i].body.translation().y < -2) removeObj(objs[i]);
+}
+
+/* =========================================================
+   9. 操作（タップ判定・つつく・情報表示）
+   ========================================================= */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+let down = null;
+renderer.domElement.addEventListener('pointerdown', e=>{ down = {x:e.clientX, y:e.clientY, t:performance.now(), id:e.pointerId}; });
+renderer.domElement.addEventListener('pointerup', e=>{
+  if (!down || down.id!==e.pointerId) return;
+  const moved = Math.hypot(e.clientX-down.x, e.clientY-down.y), dt = performance.now()-down.t;
+  down = null;
+  if (moved > 8 || dt > 350) return;
+  ndc.set(e.clientX/innerWidth*2-1, -(e.clientY/innerHeight)*2+1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(objs.map(o=>o.mesh), true)[0];
+  if (hit){
+    let n = hit.object; while (n && !n.userData.obj) n = n.parent;
+    const o = n.userData.obj, m = o.body.mass();
+    o.body.applyImpulse({x:rnd(.6)*m, y:2.4*m, z:rnd(.6)*m}, true);
+    o.body.applyTorqueImpulse({x:rnd(1)*m*o.size*.3, y:rnd(1)*m*o.size*.3, z:rnd(1)*m*o.size*.3}, true);
+    showInfo(o);
+  } else {
+    const p = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),0), new THREE.Vector3());
+    if (p && Math.abs(p.x)<AREA && Math.abs(p.z)<AREA) dropAt(p.x, p.z);
+  }
+});
+function showInfo(o){
+  const m = MAT[o.mat];
+  document.getElementById('info').innerHTML =
+    `<b>${esc(o.name)}</b><br>カテゴリ: ${esc(o.entry.category||'-')}<br>材質: ${m.label}<br>` +
+    `質量: ${(o.body.mass()*1000).toFixed(0)} g<br>大きさ: ${(o.size*100).toFixed(1)} cm<br>` +
+    `硬さ ${m.hard} / 反発 ${m.rest} / 摩擦 ${m.fric}<br>当たり判定: ${o.entry.hullSource}`;
+}
+let toastTimer;
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.style.opacity=1; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.style.opacity=0, 2500); }
+
+addEventListener('resize', ()=>{ camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+/* =========================================================
+   10. 起動
+   ========================================================= */
+const ready = (async () => {
+  await Promise.all([loadMetadata(), loadHulls()]);
+  const cats = [...new Set(META.map(m=>m.category).filter(Boolean))].sort();
+  pkCat.insertAdjacentHTML('beforeend', cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join(''));
+  applyFilter();
+  // 最初に材質がばらけるよう、カテゴリ違いで6個読み込む
+  const pool = [...cats].sort(()=>Math.random()-.5).slice(0,6);
+  const first = pool.map(c=>{ const l = META.filter(m=>m.category===c); return l[Math.floor(Math.random()*l.length)]; });
+  await Promise.allSettled(first.map(loadModel));
+})().catch(err=>{ console.error(err); toast('データセットの読み込みに失敗しました'); });
+
+document.getElementById('startBtn').onclick = async () => {
+  try { await initAudio(); } catch(e) { toast('音を有効にできませんでした'); }
+  document.getElementById('start').remove();
+  toast('モデルを読み込み中…');
+  await ready;
+  pickSel.value = -1;
+  document.getElementById('rainBtn').click();
+};
+
+/* =========================================================
+   11. メインループ（固定ステップ）
+   ========================================================= */
+let acc = 0, last = performance.now();
+renderer.setAnimationLoop(now=>{
+  acc += Math.min(.1, (now-last)/1000); last = now;
+  let n = 0;
+  while (acc >= DT && n < 4){ stepPhysics(); acc -= DT; n++; }
+  if (n === 4) acc = 0;
+  for (const o of objs){ const p=o.body.translation(), r=o.body.rotation(); o.mesh.position.set(p.x,p.y,p.z); o.mesh.quaternion.set(r.x,r.y,r.z,r.w); }
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
