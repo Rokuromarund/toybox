@@ -11,26 +11,26 @@ export const thumbUrl = id => `${HF}thumbs/${encodeURIComponent(id)}.webp`;
 /* =========================================================
    1. 材質テーブル
    density : 実効密度 kg/m³（中空の物体は低め）
-   rest/fric : 反発係数 / 摩擦係数
+   rest/fric : 反発係数 / 摩擦係数（2つの物がぶつかると、反発係数は小さい方が使われる）
    hard  : 硬さ 0〜1
    f0    : 基準周波数（大きさ0.12mのとき。大きい物ほど低くなる）
    modes : [周波数比, 相対振幅]   decay: 余韻(秒)  ring: 共鳴の強さ  noise: 接触ノイズの強さ
    ========================================================= */
 export const MAT = {
-  metal:    {label:'金属',     density:1200, rest:.35, fric:.4, hard:1.0,  f0:950,  modes:[[1,1],[2.76,.6],[5.40,.4],[8.93,.25]], decay:.9,  ring:1.0, noise:.35},
-  ceramic:  {label:'陶器',     density:750, rest:.25, fric:.5, hard:.9,   f0:1400, modes:[[1,1],[2.32,.55],[4.25,.35],[6.63,.2]], decay:.35, ring:.9,  noise:.45},
-  glass:    {label:'ガラス',   density:650, rest:.3,  fric:.35,hard:.95,  f0:1900, modes:[[1,1],[2.61,.6],[4.92,.4],[7.6,.25]],  decay:.6,  ring:.9,  noise:.35},
-  wood:     {label:'木',       density:600, rest:.45, fric:.55,hard:.6,   f0:520,  modes:[[1,1],[2.57,.45],[4.2,.2]],            decay:.12, ring:.8,  noise:.6},
-  plastic:  {label:'プラスチック',density:200,rest:.4,fric:.45,hard:.5,   f0:720,  modes:[[1,1],[2.3,.4],[3.9,.2]],              decay:.07, ring:.6,  noise:.6},
-  hardplastic:{label:'硬いプラスチック・機器',density:500,rest:.35,fric:.45,hard:.75,f0:1100,modes:[[1,1],[2.45,.5],[4.3,.3]],   decay:.1,  ring:.75, noise:.55},
-  shoe:     {label:'靴',       density:350, rest:.3,  fric:.85,hard:.35,  f0:190,  modes:[[1,1],[2.3,.3]],                       decay:.06, ring:.4,  noise:.8},
-  rubber:   {label:'ゴム',     density:900, rest:.5,  fric:.9, hard:.15,  f0:220,  modes:[[1,1],[1.8,.3]],                       decay:.05, ring:.4,  noise:.7},
-  cardboard:{label:'紙・段ボール',density:150,rest:.15,fric:.6, hard:.25,  f0:260,  modes:[[1,1],[2.1,.3]],                       decay:.045,ring:.35, noise:.9},
-  fabric:   {label:'布',       density:280, rest:.1,  fric:.8, hard:.1,   f0:160,  modes:[[1,1]],                                decay:.03, ring:.2,  noise:.9},
+  metal:    {label:'金属',     density:1200, rest:.2 , fric:.4, hard:1.0,  f0:950,  modes:[[1,1],[2.76,.6],[5.40,.4],[8.93,.25]], decay:.9,  ring:1.0, noise:.35},
+  ceramic:  {label:'陶器',     density:750, rest:.15, fric:.5, hard:.9,   f0:1400, modes:[[1,1],[2.32,.55],[4.25,.35],[6.63,.2]], decay:.35, ring:.9,  noise:.45},
+  glass:    {label:'ガラス',   density:650, rest:.2 ,  fric:.35,hard:.95,  f0:1900, modes:[[1,1],[2.61,.6],[4.92,.4],[7.6,.25]],  decay:.6,  ring:.9,  noise:.35},
+  wood:     {label:'木',       density:600, rest:.35, fric:.55,hard:.6,   f0:520,  modes:[[1,1],[2.57,.45],[4.2,.2]],            decay:.12, ring:.8,  noise:.6},
+  plastic:  {label:'プラスチック',density:200,rest:.3,fric:.45,hard:.5,   f0:720,  modes:[[1,1],[2.3,.4],[3.9,.2]],              decay:.07, ring:.6,  noise:.6},
+  hardplastic:{label:'硬いプラスチック・機器',density:500,rest:.25,fric:.45,hard:.75,f0:1100,modes:[[1,1],[2.45,.5],[4.3,.3]],   decay:.1,  ring:.75, noise:.55},
+  shoe:     {label:'靴',       density:350, rest:.15,  fric:.85,hard:.35,  f0:190,  modes:[[1,1],[2.3,.3]],                       decay:.06, ring:.4,  noise:.8},
+  rubber:   {label:'ゴム',     density:900, rest:.5 ,  fric:.9, hard:.15,  f0:220,  modes:[[1,1],[1.8,.3]],                       decay:.05, ring:.4,  noise:.7},
+  cardboard:{label:'紙・段ボール',density:150,rest:.08,fric:.6, hard:.25,  f0:260,  modes:[[1,1],[2.1,.3]],                       decay:.045,ring:.35, noise:.9},
+  fabric:   {label:'布',       density:280, rest:.03,  fric:.8, hard:.1,   f0:160,  modes:[[1,1]],                                decay:.03, ring:.2,  noise:.9},
 };
 export const FLOOR = {
-  woodfloor:{label:'木の床',     color:0x8a6a4a, rest:.45, fric:.55, hard:.6,  f0:170, modes:[[1,1],[2.4,.4],[3.9,.2]], decay:.14, ring:.7,  noise:.5},
-  concrete: {label:'コンクリート',color:0x8c8f93, rest:.35, fric:.7,  hard:1.0, f0:120, modes:[[1,1],[3.1,.2]],          decay:.04, ring:.25, noise:1.0},
+  woodfloor:{label:'木の床',     color:0x8a6a4a, rest:.4 , fric:.55, hard:.6,  f0:170, modes:[[1,1],[2.4,.4],[3.9,.2]], decay:.14, ring:.7,  noise:.5},
+  concrete: {label:'コンクリート',color:0x8c8f93, rest:.45, fric:.7,  hard:1.0, f0:120, modes:[[1,1],[3.1,.2]],          decay:.04, ring:.25, noise:1.0},
   carpet:   {label:'カーペット', color:0x6b3b3b, rest:.05, fric:1.0, hard:.05, f0:90,  modes:[[1,1]],                   decay:.02, ring:.1,  noise:.5},
 };
 
@@ -56,7 +56,8 @@ export const RULES = [
   [/stainless|cast iron|\bbrass\b|alumin(i)?um|\bmetal\b|\biron\b/i, 'metal'],
   [/\bfelt\b|\bplush\b|teddy|fabric|towels?\b|dishtowel|washcloth|bath sheet|thinsulate|\bfoam\b|sootheze/i, 'fabric'],
   [/\bwood(en|an)?\b|bamboo|sushi mat|bookend|cutlery block|\bblocks?\b|woven|wicker|\bbasket\b|honey dipper/i, 'wood'],
-  [/\brubber\b|silicone|\bgloves?\b|antislip|teething|\bkong\b|squirtin/i, 'rubber'],
+  [/\bgloves?\b/i, 'fabric'],                                                   // ゴム手袋もぐにゃっとして跳ねない
+  [/\brubber\b|silicone|antislip|teething|\bkong\b|squirtin/i, 'rubber'],
   // ── ブランド（ほぼ全部が同じ素材）
   [/plantoys|melissa|granimals/i, 'wood'],                                      // 木のおもちゃ
   [/ecoforms/i, 'hardplastic'],                                                  // 植物繊維を固めた鉢
