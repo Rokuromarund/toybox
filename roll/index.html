@@ -18,10 +18,10 @@
   #timer .big{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}
   #timer.low .big{color:#ff6b6b}
   #timer .sub{font-size:10px;color:#bbb}
-  #got{position:fixed;left:50%;top:92px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.6);padding:4px 12px 4px 4px;border-radius:10px;font-size:12px;max-width:80vw;opacity:0;transition:opacity .25s;pointer-events:none;z-index:6}
+  #got{position:fixed;left:50%;top:104px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.6);padding:4px 12px 4px 4px;border-radius:10px;font-size:12px;max-width:80vw;opacity:0;transition:opacity .25s;pointer-events:none;z-index:6}
   #got img{width:40px;height:40px;object-fit:contain;background:#2e343b;border-radius:6px}
   #got span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #zoneL,#zoneR{position:fixed;top:90px;bottom:0;z-index:3;touch-action:none}
+  #zoneL,#zoneR{position:fixed;top:100px;bottom:0;z-index:3;touch-action:none}
   #zoneL{left:0;width:50%} #zoneR{right:0;width:50%}
   #stick{position:fixed;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;border:2px solid rgba(255,255,255,.7);background:rgba(0,0,0,.18);z-index:4;pointer-events:none;opacity:.4;left:70px;top:calc(100vh - 90px)}
   #stick.on{opacity:.9}
@@ -36,7 +36,7 @@
   #over .score{font-size:44px;font-weight:800}
   #over ul{list-style:none;padding:0;margin:0;font-size:11px;color:#aaa;max-height:26vh;overflow:auto;max-width:320px;text-align:left;touch-action:pan-y}
   #loadmsg{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.6);padding:10px 16px;border-radius:10px;font-size:14px;z-index:5;display:none}
-  #toast{position:fixed;left:50%;top:140px;transform:translateX(-50%);background:#222d;padding:6px 12px;border-radius:8px;font-size:12px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:20;max-width:90vw}
+  #toast{position:fixed;left:50%;top:150px;transform:translateX(-50%);background:#222d;padding:8px 16px;border-radius:10px;font-size:15px;font-weight:700;opacity:0;transition:opacity .3s;pointer-events:none;z-index:20;max-width:90vw;text-align:center}
   #credit{position:fixed;right:8px;bottom:30px;font-size:9px;color:#34505f;text-align:right;z-index:4;max-width:50vw}
   #credit a{color:#1d5f9a}
 </style>
@@ -50,10 +50,10 @@
 <body>
 <div id="start" class="overlay">
   <h1>ペタペタ大そうじ</h1>
-  <p>ミニチュアのちらかった部屋を、ネバネバのペタ玉でお片づけ。<br>
-     玉より小さな物はペタッとくっついて、玉がどんどん大きくなります。<br>
-     制限時間<b>3分</b>のうちに、直径 <b>50cm</b> まで育てよう。大きすぎる物には弾かれるので、小さな物から順番に。<br>
-     速くぶつかると、くっついた物が飛んでいくこともあります。</p>
+  <p>ミニチュアのちらかった部屋を、ネバネバのかたまりでお片づけ。<br>
+     かたまりより小さな物はペタッとくっついて、物の山がどんどん大きくなります。<br>
+     制限時間<b>4分</b>のうちに、どこまで大きくなれるかな？ <b>50cm</b> をこえると部屋の壁がたおれて、外の世界へ。<br>
+     大きすぎる物には弾かれるので、小さな物から順番に。速くぶつかると、くっついた物が飛んでいくこともあります。</p>
   <p>操作：スマホは画面の左側をドラッグで転がし、右側をドラッグで視点を回します。<br>PCは WASD / 矢印キーで転がし、Q・E で視点を回します。</p>
   <button id="startBtn">スタート</button>
   <div id="startMsg" style="font-size:12px;color:#aaa">データを読み込み中…</div>
@@ -71,11 +71,12 @@
 </div>
 
 <div id="hud">
-  <div class="big"><span id="hDia">8.0</span> cm <small>/ 目標 50 cm</small></div>
+  <div class="big"><span id="hDia">3.0</span> <small id="hUnit">cm</small></div>
   <div id="prog"><div id="progBar"></div></div>
+  <div class="sub" id="hNext"></div>
   <div class="sub" id="hCount">0 個</div><div class="sub" id="hBest"></div>
 </div>
-<div id="timer"><div class="big" id="hTime">3:00</div><div class="sub">のこり</div></div>
+<div id="timer"><div class="big" id="hTime">4:00</div><div class="sub">のこり</div></div>
 <div id="got"><img id="gotImg" alt=""><span id="gotName"></span></div>
 <div id="zoneL"></div><div id="zoneR"></div>
 <div id="stick"><div id="knob"></div></div>
@@ -90,32 +91,43 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import * as RAPIER_NS from 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/+esm';
-import { HF, glbUrl, thumbUrl, MAT, FLOOR, OVERRIDES, decideMat, loadMetadata, loadHulls, hullFor, initAudio, ring, clamp, pickWeighted } from '../common.js';
+import { HF, glbUrl, thumbUrl, MAT, decideMat, loadMetadata, loadHulls, hullFor, initAudio, ring, clamp, pickWeighted } from '../common.js';
 const RAPIER = RAPIER_NS.default ?? RAPIER_NS;
 const REST_MIN = () => RAPIER.CoefficientCombineRule.Min;   // 反発係数は「跳ねにくい方」で決まる
 const $ = id => document.getElementById(id);
 const lodUrl = id => `${HF}lods/${encodeURIComponent(id)}/${encodeURIComponent(id)}_lod2.glb`;   // 軽量版（512px テクスチャ）
+const rand = (a, b) => a + Math.random()*(b-a);
 
 /* =========================================================
    設定
    ========================================================= */
-const SCALE = 0.4;            // 物をミニチュアにする縮尺（元の大きさだと小さな物がほとんどなく、最初に何もくっつかないため）
+const SCALE = 0.4;            // 物をミニチュアにする縮尺
 const HALF = 2.0;             // 部屋の半分の幅 (m)  → 4m × 4m
-const WALL_VIS = 0.45;        // 壁の見た目の高さ（当たり判定は高い）
-const D0 = 0.08;              // 最初の玉の直径 (m)
-const GOAL = 0.50;            // 目標の直径 (m)
-const TIME_LIMIT = 180;       // 制限時間 (秒)
-const STICK_RATIO = 0.55;     // 物の大きさ（最長辺）が 玉の直径 × この値 より小さいとくっつく
-const GROW_K = 8;             // 成長のしやすさ：d = cbrt(d0³ + K × Σ物の体積)
-const VOL_COEF = 0.3;         // 物の体積の見積もり = 係数 × 大きさ³
-const MAX_LUMPS = 30;         // 当たり判定を持つくっついた物の数（古い物は見た目だけ）
-const LUMP_R = 0.26;          // くっついた物の当たり判定（球）の半径 = 大きさ × この値
-const PUSH_IN = 0.25;         // くっつけるとき、表面へ押し込む量 = 大きさ × この値
-const N_SMALL = 70, N_MID = 45, N_LARGE = 20;   // 物の数（ミニチュア後の大きさで 3〜5cm / 5〜10cm / 10〜20cm）
-const START_READY = 40;       // 最初にこれだけ読み込めたら始める
+const YARD_HALF = 8.0;        // 外の広場の半分の幅 (m) → 16m × 16m
+const WALL_VIS = 0.45;        // 壁の見た目の高さ
+const D0 = 0.03;              // 最初のネバネバの核の直径 (m)
+const EXPAND_AT = 0.50;       // この大きさで壁がたおれて広場に出る (m)
+const TIME_LIMIT = 240;       // 制限時間 (秒)
+const STICK_RATIO = 0.6;      // 物の最長辺が かたまりの大きさ × この値 より小さいとくっつく
+const MAX_HULLS = 40;         // 当たり判定（凸包）を持つ、くっついた物の数（古い物は外す）
+const CORE_FRAC = 0.74;       // 内側の核の半径 = かたまりの半径 × この値（古い物の当たり判定を外したあとの代わり）
+const CORE_RAMP = 12;         // 古い当たり判定をこれだけ外すと、核が上の大きさまで育つ（それまでは小さい核のまま）
+const GLUE_VIS = 0.2;         // ネバネバの見た目の半径 = かたまりの半径 × この値（物に覆われて見えなくなる）
+const GRAB_PULL = 0.22;       // 表面からかたまりの半径のこの割合まで近づいた小さな物は、ネバネバに引き寄せられる
+const OVERLAP = 0.13;         // くっつけるとき、物の大きさのこの割合だけ食い込ませる
+const SIZE_Q = 0.75;          // かたまりの大きさ = くっついた物の外側までの距離の 75% 点 × 2
+const MASS_RHO = 220;         // かたまり全体の密度 (kg/m³)
+const N_MODELS = 40;          // 使うモデルの種類
+const START_READY = 16;       // 小さい方からこれだけ読み込めたら始める
 const MAX_FETCH = 6;          // 同時に読み込む数
-const KNOCK_SPEED = 1.3;      // 大きな物にこの速さ(m/s)以上でぶつかると、くっついた物が飛ぶ
+const MAX_PROXY = 24;         // かたまりの近くで、当たり判定を持つ物の最大数
+const EXTRA_CAP = 40;         // モデルごとの、あとから補充できる数
+const POP_TIME = 0.3;         // くっついたときのポンッのアニメ (秒)
+const BURY_RATIO = 0.04;      // かたまりの 4% より小さく、深く埋まった物は描かない
+const ROOM_BANDS = [[300,.012,.035],[190,.035,.075],[120,.075,.14],[70,.14,.26],[30,.26,.45]];   // 部屋の物 [数, 最小, 最大]（ミニチュア後の最長辺 m）
+const YARD_BANDS = [[150,.14,.30],[110,.30,.65],[70,.65,1.4],[34,1.4,2.8]];                         // 広場の物（部屋と同じモデルの拡大版）
 const START = {x:-1.3, z:1.3};
+const MILESTONES = [[.2,'20cm とっぱ！'],[.5,'部屋を飛び出した！'],[1,'1m をこえた！'],[2,'2m！ ものすごい大きさ'],[4,'4m！ もう止まらない']];
 
 /* =========================================================
    描画
@@ -131,7 +143,7 @@ document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xcfe3ee);
-const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.01, 40);
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.01, 90);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a6a, 1.5));
 const sun = new THREE.DirectionalLight(0xfff4e0, 2.4);
 sun.castShadow = true;
@@ -157,19 +169,35 @@ const floorTex = canvasTex(512, 512, (g,w,h)=>{
 }, [4,4]);
 const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(HALF*2, HALF*2), new THREE.MeshStandardMaterial({map:floorTex, roughness:.85}));
 floorMesh.rotation.x = -Math.PI/2; floorMesh.receiveShadow = true; scene.add(floorMesh);
+// 外の広場（壁がたおれるまでは見えない）
+const grassTex = canvasTex(256, 256, (g,w,h)=>{
+  g.fillStyle = '#7fb069'; g.fillRect(0,0,w,h);
+  for (let i=0;i<500;i++){ g.fillStyle = `hsla(${95+Math.random()*30},45%,${38+Math.random()*18}%,.5)`; g.fillRect(Math.random()*w, Math.random()*h, 3, 3+Math.random()*5); }
+}, [YARD_HALF*2/1.6, YARD_HALF*2/1.6]);
+const yardMesh = new THREE.Mesh(new THREE.PlaneGeometry(YARD_HALF*2, YARD_HALF*2), new THREE.MeshStandardMaterial({map:grassTex, roughness:1}));
+yardMesh.rotation.x = -Math.PI/2; yardMesh.position.y = -.004; yardMesh.receiveShadow = true; yardMesh.visible = false; scene.add(yardMesh);
 
-function addBox(cx, cy, cz, sx, sy, sz, color, opt = {}){
-  const m = new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz), new THREE.MeshStandardMaterial({color, roughness:opt.rough ?? .8}));
-  m.position.set(cx,cy,cz); if (opt.q) m.quaternion.copy(opt.q);
-  m.castShadow = m.receiveShadow = true; scene.add(m); if (opt.furn) FURN_MESH.push(m); return m;
+// 家具・広場の箱は、色つきの InstancedMesh 1つにまとめて描く
+const BOX_CAP = 48;
+const boxMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({color:0xffffff, roughness:.8}), BOX_CAP);
+boxMesh.castShadow = boxMesh.receiveShadow = true; boxMesh.frustumCulled = false; boxMesh.count = 0; scene.add(boxMesh);
+const _bm = new THREE.Matrix4(), _bc = new THREE.Color(), _bq = new THREE.Quaternion(), _bp = new THREE.Vector3(), _bs = new THREE.Vector3();
+function addBox(cx, cy, cz, sx, sy, sz, color, q){
+  const i = boxMesh.count++;
+  _bm.compose(_bp.set(cx,cy,cz), q || _bq.identity(), _bs.set(sx,sy,sz));
+  boxMesh.setMatrixAt(i, _bm); boxMesh.setColorAt(i, _bc.set(color));
+  boxMesh.instanceMatrix.needsUpdate = true; boxMesh.instanceColor.needsUpdate = true; boxMesh.boundingSphere = null;
 }
-const FURN_MESH = [];     // カメラと玉の間をさえぎる家具（見えなくならないよう、カメラを寄せる）
-// 壁（低く見せるが、当たり判定は高くして玉が出ないようにする）
+// 壁（倒れるので1枚ずつ。根元を軸に外側へ回る）
 const WALL_COL = 0xf2e6d0;
-addBox(0, WALL_VIS/2, -HALF-.05, HALF*2+.2, WALL_VIS, .1, WALL_COL);
-addBox(0, WALL_VIS/2,  HALF+.05, HALF*2+.2, WALL_VIS, .1, WALL_COL);
-addBox(-HALF-.05, WALL_VIS/2, 0, .1, WALL_VIS, HALF*2, WALL_COL);
-addBox( HALF+.05, WALL_VIS/2, 0, .1, WALL_VIS, HALF*2, WALL_COL);
+const walls = [];
+for (const [x,z,len,thick,axis,sign] of [[0,-HALF-.1,HALF*2+.2,.1,'x',-1],[0,HALF+.1,HALF*2+.2,.1,'x',1],[HALF+.1,0,.1,HALF*2,'z',-1],[-HALF-.1,0,.1,HALF*2,'z',1]]){
+  const pivot = new THREE.Group(); pivot.position.set(x,0,z);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(axis==='x'?len:thick, WALL_VIS, axis==='x'?thick:len), new THREE.MeshStandardMaterial({color:WALL_COL, roughness:.8}));
+  m.position.set(axis==='z' ? sign*.05 : 0, WALL_VIS/2, axis==='x' ? -sign*.05 : 0);
+  m.castShadow = m.receiveShadow = true; pivot.add(m); scene.add(pivot);
+  walls.push({pivot, axis, sign});
+}
 // ラグ（見た目だけ。ごく薄い）
 {
   const rug = new THREE.Mesh(new THREE.CylinderGeometry(.95,.95,.006,48), new THREE.MeshStandardMaterial({color:0x5b8fb9, roughness:1}));
@@ -190,52 +218,51 @@ world.numAdditionalFrictionIterations = 4;
 world.lengthUnit = 0.1;
 const colliderToObj = new Map();   // collider.handle → 物のデータ / 'floor' / 'wall' / 'furn' / 'ball'
 
-// 当たり判定だけの固定物を作る（見た目は addBox で別に作る）
+// 当たり判定だけの固定物を作る（見た目は addBox などで別に作る）
 const fixedBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
 function fixedBox(cx, cy, cz, hx, hy, hz, tag, q){
   const d = RAPIER.ColliderDesc.cuboid(hx,hy,hz).setTranslation(cx,cy,cz).setRestitution(.3).setRestitutionCombineRule(REST_MIN()).setFriction(.7);
   if (q) d.setRotation({x:q.x,y:q.y,z:q.z,w:q.w});
   const c = world.createCollider(d, fixedBody); colliderToObj.set(c.handle, tag); return c;
 }
-fixedBox(0, -.5, 0, HALF+1, .5, HALF+1, 'floor');
-for (const [x,z,hx,hz] of [[0,-HALF-.05,HALF+.2,.05],[0,HALF+.05,HALF+.2,.05],[-HALF-.05,0,.05,HALF],[HALF+.05,0,.05,HALF]]) fixedBox(x, 2, z, hx, 2, hz, 'wall');
+fixedBox(0, -.5, 0, YARD_HALF+3, .5, YARD_HALF+3, 'floor');
+let wallCols = [], yardCols = [];
+function makeWallCols(){   // 厚い壁（ぶつかっても抜けない）
+  wallCols = [[0,-HALF-.5,HALF+1,.5],[0,HALF+.5,HALF+1,.5],[-HALF-.5,0,.5,HALF],[HALF+.5,0,.5,HALF]].map(([x,z,hx,hz]) => fixedBox(x, 2.5, z, hx, 2.5, hz, 'wall'));
+}
+function removeCols(list){ for (const c of list){ colliderToObj.delete(c.handle); world.removeCollider(c, false); } list.length = 0; }
+makeWallCols();
 
 /* =========================================================
    部屋の家具（箱だけで作る）
    ========================================================= */
-const SURFACES = [];    // 物を置ける台の上面 {x0,x1,z0,z1,top}
+const SURFACES = [];    // 物を置ける台の上面 {x0,x1,z0,z1,top,n}
 const KEEPOUT = [];     // 床に物を置かない範囲 {x0,x1,z0,z1}
-function furnBox(cx, cz, w, d, top, thick, color){   // 天板（下は空いている）
-  addBox(cx, top - thick/2, cz, w, thick, d, color, {furn:true});
-  fixedBox(cx, top - thick/2, cz, w/2, thick/2, d/2, 'furn');
-}
-function solidBox(cx, cz, w, d, h, color){
-  addBox(cx, h/2, cz, w, h, d, color, {furn:true});
-  fixedBox(cx, h/2, cz, w/2, h/2, d/2, 'furn');
-}
-// ローテーブル（玉は下をくぐれる）
+const FURN = (cx, cy, cz, sx, sy, sz, color, q) => { addBox(cx,cy,cz,sx,sy,sz,color,q); fixedBox(cx,cy,cz,sx/2,sy/2,sz/2,'furn',q); };
+function furnBox(cx, cz, w, d, top, thick, color){ FURN(cx, top - thick/2, cz, w, thick, d, color); }   // 天板（下は空いている）
+function solidBox(cx, cz, w, d, h, color){ FURN(cx, h/2, cz, w, h, d, color); }
+// ローテーブル（まわりに幕板をつけて、大きくなったかたまりが下にはさまらないようにする）
 {
   const cx = .6, cz = -.3, w = 1.0, d = .6, top = .34;
   furnBox(cx, cz, w, d, top, .04, 0xb98a5a);
-  for (const sx of [-1,1]) for (const sz of [-1,1]){
-    const lx = cx + sx*(w/2-.05), lz = cz + sz*(d/2-.05);
-    addBox(lx, (top-.04)/2, lz, .06, top-.04, .06, 0x8c6a45); fixedBox(lx, (top-.04)/2, lz, .03, (top-.04)/2, .03, 'furn');
-  }
-  SURFACES.push({x0:cx-w/2+.1, x1:cx+w/2-.1, z0:cz-d/2+.1, z1:cz+d/2-.1, top, n:8});
+  for (const sx of [-1,1]) for (const sz of [-1,1]) FURN(cx + sx*(w/2-.05), (top-.04)/2, cz + sz*(d/2-.05), .06, top-.04, .06, 0x8c6a45);
+  for (const sz of [-1,1]) FURN(cx, (top-.04)/2, cz + sz*(d/2-.03), w-.12, top-.04, .02, 0x9d7448);
+  for (const sx of [-1,1]) FURN(cx + sx*(w/2-.03), (top-.04)/2, cz, .02, top-.04, d-.12, 0x9d7448);
+  SURFACES.push({x0:cx-w/2+.1, x1:cx+w/2-.1, z0:cz-d/2+.1, z1:cz+d/2-.1, top, n:12});
   KEEPOUT.push({x0:cx-w/2-.1, x1:cx+w/2+.1, z0:cz-d/2-.1, z1:cz+d/2+.1});
 }
 // 本棚（低い棚）
 {
   const cx = -.7, cz = -1.75, w = 1.6, d = .5, h = .40;
   solidBox(cx, cz, w, d, h, 0x6f8f6a);
-  SURFACES.push({x0:cx-w/2+.1, x1:cx+w/2-.1, z0:cz-d/2+.1, z1:cz+d/2-.1, top:h, n:10});
+  SURFACES.push({x0:cx-w/2+.1, x1:cx+w/2-.1, z0:cz-d/2+.1, z1:cz+d/2-.1, top:h, n:14});
   KEEPOUT.push({x0:cx-w/2-.1, x1:cx+w/2+.1, z0:cz-d/2-.1, z1:cz+d/2+.1});
 }
 // オットマン
 {
   const cx = 1.7, cz = 1.2, w = .6, d = .6, h = .22;
   solidBox(cx, cz, w, d, h, 0xc9605a);
-  SURFACES.push({x0:cx-w/2+.08, x1:cx+w/2-.08, z0:cz-d/2+.08, z1:cz+d/2-.08, top:h, n:4});
+  SURFACES.push({x0:cx-w/2+.08, x1:cx+w/2-.08, z0:cz-d/2+.08, z1:cz+d/2-.08, top:h, n:6});
   KEEPOUT.push({x0:cx-w/2-.1, x1:cx+w/2+.1, z0:cz-d/2-.1, z1:cz+d/2+.1});
 }
 // スロープ：A（低い端の床の位置）から水平方向 u に長さ L 進んで高さ H になる板
@@ -244,8 +271,7 @@ function ramp(ax, az, ux, uz, L, H, width, color){
   const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), Math.atan2(-uz, ux))
     .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1), th));
   const cx = ax + ux*L/2, cz = az + uz*L/2, cy = H/2 - .02*Math.cos(th);
-  addBox(cx, cy, cz, len, .04, width, color, {q, furn:true});
-  fixedBox(cx, cy, cz, len/2, .02, width/2, 'furn', q);
+  FURN(cx, cy, cz, len, .04, width, color, q);
   const ex = ax + ux*L, ez = az + uz*L;
   const hw = Math.abs(uz)*width/2 + .12, hh = Math.abs(ux)*width/2 + .12;   // 板の外側（向きに応じて幅方向に広げる）
   KEEPOUT.push({x0:Math.min(ax,ex)-hw, x1:Math.max(ax,ex)+hw, z0:Math.min(az,ez)-hh, z1:Math.max(az,ez)+hh});
@@ -253,248 +279,433 @@ function ramp(ax, az, ux, uz, L, H, width, color){
 ramp(.6, 1.2, 1, 0, .8, .22, .5, 0xd8b26a);           // → オットマン
 ramp(-.2, -.4, 0, -1, 1.1, .40, .5, 0xd8b26a);        // → 本棚
 ramp(.6, -1.5, 0, 1, .9, .34, .5, 0xd8b26a);          // → ローテーブル
+const ROOM_BOXES = boxMesh.count;
 
 /* =========================================================
-   モデルの読み込み
+   モデルの読み込み（同じモデルを何度も使い回す）
    ========================================================= */
 const ktx2 = new KTX2Loader().setTranscoderPath('https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/basis/').detectSupport(renderer);
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2);
 let META = [];
-const cache = new Map();   // id → Promise<entry>
-function meshPoints(root){
-  root.updateMatrixWorld(true);
-  const pts = []; const v = new THREE.Vector3();
-  root.traverse(o=>{ if(!o.isMesh) return; const p = o.geometry.attributes.position;
-    const step = Math.max(1, Math.floor(p.count/2000));
-    for (let i=0;i<p.count;i+=step){ v.fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld); pts.push(v.x,v.y,v.z); } });
-  return new Float32Array(pts);
-}
+let MODELS = [];           // 使うモデル {meta, s0, loaded, parts, dims, hull, wMeshes, cMeshes, wCount, cCount, wSlots, cSlots, cap}
+const clumpGroup = new THREE.Group(); scene.add(clumpGroup);
 async function loadGltf(meta){
   try { return await loader.loadAsync(lodUrl(meta.id)); }
   catch(e){ return await loader.loadAsync(glbUrl(meta.id)); }   // 軽量版がなければ通常版
 }
-function loadEntry(meta){
-  if (cache.has(meta.id)) return cache.get(meta.id);
-  const p = loadGltf(meta).then(gltf=>{
-    const root = gltf.scene;
-    root.traverse(o=>{ if(o.isMesh) o.castShadow = o.receiveShadow = true; });
-    const hull = hullFor(meta.id);
-    const raw = (hull?.points && hull.points.length >= 12) ? hull.points : meshPoints(root);
-    const points = raw.map(v=>v*SCALE);
-    const box = new THREE.Box3().setFromObject(root);
-    const sz = box.getSize(new THREE.Vector3()).multiplyScalar(SCALE);
-    const holder = new THREE.Group(); holder.add(root); holder.scale.setScalar(SCALE);
-    const d = decideMat(meta.id, meta.name, meta.category, meta.brand);
-    const center = box.getCenter(new THREE.Vector3()).multiplyScalar(SCALE);
-    return {
-      id: meta.id, name: meta.name, mat: d.mat, realSize: meta.size,
-      size: Math.max(sz.x,sz.y,sz.z),           // ミニチュア後の最長辺 (m)
-      minY: box.min.y*SCALE, center,
-      mass: clamp((OVERRIDES[meta.id]?.mass ?? meta.mass ?? hull?.mass ?? .2) * .2, .05, 3),
-      mesh: () => holder.clone(true),
-      collider: () => RAPIER.ColliderDesc.convexHull(points) || RAPIER.ColliderDesc.cuboid(sz.x/2, sz.y/2, sz.z/2).setTranslation(center.x,center.y,center.z),
-    };
+function floatAttr(a){   // 量子化された属性も Float32 にしてから変換する
+  const out = new Float32Array(a.count*3);
+  for (let i=0;i<a.count;i++){ out[i*3] = a.getX(i); out[i*3+1] = a.getY(i); out[i*3+2] = a.getZ(i); }
+  return new THREE.BufferAttribute(out, 3);
+}
+async function loadModel(m){
+  const gltf = await loadGltf(m.meta);
+  const root = gltf.scene; root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root);
+  const c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
+  const bake = new THREE.Matrix4().makeScale(SCALE,SCALE,SCALE).multiply(new THREE.Matrix4().makeTranslation(-c.x,-c.y,-c.z));
+  const parts = []; const pts = [];
+  root.traverse(o=>{
+    if (!o.isMesh) return;
+    const g = o.geometry.clone();
+    g.setAttribute('position', floatAttr(g.attributes.position));
+    if (g.attributes.normal) g.setAttribute('normal', floatAttr(g.attributes.normal));
+    g.applyMatrix4(bake.clone().multiply(o.matrixWorld));
+    g.computeBoundingSphere();
+    parts.push({geo:g, mat:o.material});
+    const p = g.attributes.position, step = Math.max(1, Math.floor(p.count/400));
+    for (let i=0;i<p.count;i+=step) pts.push(p.getX(i), p.getY(i), p.getZ(i));
   });
-  p.catch(()=>cache.delete(meta.id));
-  cache.set(meta.id, p);
-  return p;
+  if (!parts.length) throw new Error('no mesh');
+  m.dims = sz.multiplyScalar(SCALE);
+  m.s0 = Math.max(m.dims.x, m.dims.y, m.dims.z);
+  const hull = hullFor(m.meta.id);
+  if (hull?.points && hull.points.length >= 12){
+    const a = new Float32Array(hull.points.length), cc = [c.x,c.y,c.z];
+    for (let i=0;i<a.length;i++) a[i] = (hull.points[i] - cc[i%3])*SCALE;
+    m.hull = a;
+  } else m.hull = new Float32Array(pts);
+  const d = decideMat(m.meta.id, m.meta.name, m.meta.category, m.meta.brand);
+  m.mat = d.mat; m.name = m.meta.name; m.category = m.meta.category; m.realSize = m.meta.size;
+  m.wMeshes = []; m.cMeshes = [];
+  for (const p of parts){
+    const w = new THREE.InstancedMesh(p.geo, p.mat, m.cap), cm = new THREE.InstancedMesh(p.geo, p.mat, m.cap);
+    for (const im of [w, cm]){ im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); im.frustumCulled = false; im.count = 0; im.visible = false; im.receiveShadow = true; }
+    cm.castShadow = true;    // 影を落とすのはかたまりだけ（描画を減らす）
+    scene.add(w); clumpGroup.add(cm); m.wMeshes.push(w); m.cMeshes.push(cm);
+  }
+  m.wCount = 0; m.cCount = 0; m.wSlots = []; m.cSlots = [];
+  m.loaded = true;
 }
 
 /* =========================================================
-   玉
+   かたまり（ネバネバの核 ＋ くっついた物）
    ========================================================= */
-const ballTex = canvasTex(256, 128, (g,w,h)=>{
-  g.fillStyle = '#ff8a5c'; g.fillRect(0,0,w,h);
-  g.fillStyle = '#ffd36b';
-  for (let i=0;i<8;i++){ g.fillRect(i*w/8, 0, w/16, h); }
-  g.fillStyle = 'rgba(255,255,255,.85)';
-  for (let i=0;i<12;i++){ g.beginPath(); g.arc((i*53)%w, 20+((i*37)%(h-40)), 7, 0, 7); g.fill(); }
-});
-const ballGroup = new THREE.Group(); scene.add(ballGroup);
-const coreMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 24), new THREE.MeshStandardMaterial({map:ballTex, roughness:.45}));
-coreMesh.castShadow = true; ballGroup.add(coreMesh);
+const coreMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 18), new THREE.MeshStandardMaterial({color:0xc86a58, roughness:.3, metalness:0}));
+coreMesh.castShadow = true; clumpGroup.add(coreMesh);
 
 const ballBody = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(START.x, D0/2+.01, START.z)
-  .setCcdEnabled(true).setLinearDamping(.35).setAngularDamping(.25).setCanSleep(false));
+  .setCcdEnabled(true).setLinearDamping(.3).setAngularDamping(.5).setCanSleep(false));
 const core = world.createCollider(RAPIER.ColliderDesc.ball(D0/2).setFriction(1.0).setRestitution(.15).setRestitutionCombineRule(REST_MIN())
-  .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS), ballBody);
+  .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS | RAPIER.ActiveEvents.COLLISION_EVENTS), ballBody);
 colliderToObj.set(core.handle, 'ball');
-const ballObj = {mat:'rubber', get size(){ return ball.d; }, body:ballBody, col:core, mesh:ballGroup, pv:{x:0,y:0,z:0}, pw:{x:0,y:0,z:0}};
-const ball = { d: D0, vol: 0 };      // 直径と、くっついた物の体積の合計
-const stuck = [];                   // くっついた物（古い順）{o, dir, extra, offset, lump, vol}
-const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _c = new THREE.Vector3();
-const ballMass = d => clamp(1100 * Math.PI/6 * d**3, .15, 60);
-
-// 玉の直径を変える：核の球・質量・くっついた物の位置を更新する
-function setDiameter(d){
-  const old = ball.d;
-  ball.d = d;
-  const R = d/2;
-  core.setRadius(R); core.setMass(ballMass(d));
-  coreMesh.scale.setScalar(R);
-  if (d > old){ const t = ballBody.translation(); ballBody.setTranslation({x:t.x, y:t.y + (d-old)/2, z:t.z}, true); }   // 床にめり込まないよう持ち上げる
-  for (const s of stuck) placeStuck(s, R);
+const ballObj = {mat:'plastic', get size(){ return clump.D; }, body:ballBody, col:core, pv:{x:0,y:0,z:0}, pw:{x:0,y:0,z:0}};
+// clump.D は実際の広がりから測った大きさ。R は半径、Rmax は出っぱりを含む最大半径、cl は重心（かたまりの座標）
+const clump = { D: D0, R: D0/2, Rmax: D0/2, coreR: D0/2, cl: new THREE.Vector3(), hullMass: 0, maxD: D0, dropped: 0 };
+const stuck = [];          // くっついた物（古い順）{it, c, hull, hm, hidden}
+const bodyPos = new THREE.Vector3(), bodyQ = new THREE.Quaternion(), comW = new THREE.Vector3();
+const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _m4 = new THREE.Matrix4();
+const UP = new THREE.Vector3(0,1,0);
+function readBody(){
+  const t = ballBody.translation(), r = ballBody.rotation();
+  bodyPos.set(t.x,t.y,t.z); bodyQ.set(r.x,r.y,r.z,r.w);
+  comW.copy(clump.cl).applyQuaternion(bodyQ).add(bodyPos);
 }
-function placeStuck(s, R){
-  const r = R + s.extra;
-  s.o.mesh.position.set(s.dir.x*r + s.offset.x, s.dir.y*r + s.offset.y, s.dir.z*r + s.offset.z);
-  if (s.lump) s.lump.setTranslationWrtParent({x:s.dir.x*r, y:s.dir.y*r, z:s.dir.z*r});
+const targetMass = D => MASS_RHO*Math.PI/6*D**3;
+function setCore(r){
+  clump.coreR = r;
+  core.setRadius(r);
+  core.setMass(Math.max(targetMass(clump.D)*.3, targetMass(clump.D) - clump.hullMass, 1e-5));
 }
 
 /* =========================================================
-   部屋の物
+   部屋の物（空間グリッド上のただのデータ）
    ========================================================= */
-const objs = [];                    // 部屋にある物 {meta, entry, mesh, body, col, size, mat, stuck, noStick}
-let runId = 0;                      // やり直したときに古い読み込みが割り込まないための番号
-function spawnBody(o, pos, quat, vel){
-  const entry = o.entry, m = MAT[entry.mat];
-  const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
-    .setTranslation(pos.x,pos.y,pos.z).setRotation({x:quat.x,y:quat.y,z:quat.z,w:quat.w})
-    .setLinearDamping(.5).setAngularDamping(.8).setCanSleep(true));
-  if (vel) body.setLinvel(vel, true);
-  const cd = entry.collider().setRestitution(Math.min(m.rest,.2)).setRestitutionCombineRule(REST_MIN()).setFriction(Math.max(m.fric,.5))
-    .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS | RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS).setMass(entry.mass);
-  const col = world.createCollider(cd, body);
-  o.body = body; o.col = col; o.stuck = false; o.pv = {x:0,y:0,z:0}; o.pw = {x:0,y:0,z:0};
-  colliderToObj.set(col.handle, o);
-}
-const yawQ = a => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), a);
-function addObject(entry, pos){
-  const o = {entry, name: entry.name, mat: entry.mat, size: entry.size, mesh: entry.mesh(), noStick: 0};
-  const q = yawQ(Math.random()*Math.PI*2);
-  const p = {x:pos.x, y: pos.y - entry.minY + .01, z:pos.z};
-  o.mesh.position.set(p.x,p.y,p.z); o.mesh.quaternion.copy(q);
-  scene.add(o.mesh);
-  spawnBody(o, p, q);
-  objs.push(o);
-  return o;
-}
-function clearRoom(){
-  for (const o of objs){
-    if (o.body){ colliderToObj.delete(o.col.handle); world.removeRigidBody(o.body); }
-    o.mesh.parent?.remove(o.mesh);
-  }
-  objs.length = 0;
-  for (const s of stuck) if (s.lump){ colliderToObj.delete(s.lump.handle); }
-  stuck.length = 0;
-  // 玉に付いた当たり判定を全部外す（核だけ残す）
-  for (let i = ballBody.numColliders()-1; i >= 0; i--){ const c = ballBody.collider(i); if (c.handle !== core.handle) world.removeCollider(c, false); }
-}
-
-/* =========================================================
-   配置の計画：小さい物はスタート地点の近く、大きい物は遠く／台の上にも
-   ========================================================= */
-function pickSet(lo, hi, n, used){
-  let pool = META.filter(m => m.size*SCALE >= lo && m.size*SCALE < hi && !used.has(m.id));
-  const out = [];
-  while (out.length < n && pool.length){
-    const m = pickWeighted(pool); out.push(m); used.add(m.id); pool = pool.filter(x=>x!==m);
-  }
+const CELL = .6, GN = 44, GOFF = 22;
+const grid = Array.from({length: GN*GN}, ()=>[]);
+const cellOf = (x,z) => clamp(Math.floor(z/CELL)+GOFF,0,GN-1)*GN + clamp(Math.floor(x/CELL)+GOFF,0,GN-1);
+function gridAdd(it){ it.cell = cellOf(it.p.x, it.p.z); grid[it.cell].push(it); }
+function gridDel(it){ if (it.cell < 0) return; const a = grid[it.cell], i = a.indexOf(it); if (i >= 0){ a[i] = a[a.length-1]; a.pop(); } it.cell = -1; }
+function queryItems(x, z, r, out){
+  out.length = 0;
+  const x0 = clamp(Math.floor((x-r)/CELL)+GOFF,0,GN-1), x1 = clamp(Math.floor((x+r)/CELL)+GOFF,0,GN-1);
+  const z0 = clamp(Math.floor((z-r)/CELL)+GOFF,0,GN-1), z1 = clamp(Math.floor((z+r)/CELL)+GOFF,0,GN-1);
+  for (let iz=z0; iz<=z1; iz++) for (let ix=x0; ix<=x1; ix++){ const a = grid[iz*GN+ix]; for (let i=0;i<a.length;i++) out.push(a[i]); }
   return out;
 }
-function inKeepout(x,z,mg){ return KEEPOUT.some(k => x > k.x0-mg && x < k.x1+mg && z > k.z0-mg && z < k.z1+mg); }
-function makePlan(){
-  const used = new Set();
-  const metas = [...pickSet(.03,.05,N_SMALL,used), ...pickSet(.05,.10,N_MID,used), ...pickSet(.10,.20,N_LARGE,used)];
-  const positions = [];
-  for (const s of SURFACES){   // 台の上は2列に並べる（重ならないように）
-    const cols = Math.ceil(s.n/2);
-    for (let i=0;i<s.n;i++){
-      const c = i % cols, r = Math.floor(i/cols);
-      positions.push({x: s.x0 + (c+.5+(Math.random()-.5)*.3)/cols*(s.x1-s.x0), z: s.z0 + (r+.5+(Math.random()-.5)*.3)/2*(s.z1-s.z0), y: s.top});
-    }
+const proxies = new Set();       // 当たり判定（物理ボディ）を持っている物
+let worldCount = 0;
+function writeW(it){ _bs.setScalar(it.k); _m4.compose(it.p, it.q, _bs); for (const im of it.m.wMeshes) im.setMatrixAt(it.idx, _m4); it.m.wDirty = true; }
+function addW(it){ const m = it.m; it.idx = m.wCount++; m.wSlots[it.idx] = it; writeW(it); worldCount++; }
+function removeW(it){
+  const m = it.m, i = it.idx, last = --m.wCount;
+  if (i !== last){ const o = m.wSlots[last]; m.wSlots[i] = o; o.idx = i; for (const im of m.wMeshes){ im.getMatrixAt(last, _m4); im.setMatrixAt(i, _m4); } }
+  m.wSlots[last] = null; it.idx = -1; m.wDirty = true; worldCount--;
+}
+function writeC(it, sc = 1){ _bs.setScalar(it.k*sc); _m4.compose(it.lp, it.lq, _bs); for (const im of it.m.cMeshes) im.setMatrixAt(it.cidx, _m4); it.m.cDirty = true; }
+function addC(it){ const m = it.m; it.cidx = m.cCount++; m.cSlots[it.cidx] = it; writeC(it, .5); }
+function removeC(it){
+  if (it.cidx < 0) return;
+  const m = it.m, i = it.cidx, last = --m.cCount;
+  if (i !== last){ const o = m.cSlots[last]; m.cSlots[i] = o; o.cidx = i; for (const im of m.cMeshes){ im.getMatrixAt(last, _m4); im.setMatrixAt(i, _m4); } }
+  m.cSlots[last] = null; it.cidx = -1; m.cDirty = true;
+}
+function flushInstances(){
+  for (const m of MODELS){
+    if (!m.loaded) continue;
+    if (m.wDirty){ m.wDirty = false; for (const im of m.wMeshes){ im.count = m.wCount; im.visible = m.wCount > 0; im.instanceMatrix.needsUpdate = true; } }
+    if (m.cDirty){ m.cDirty = false; for (const im of m.cMeshes){ im.count = m.cCount; im.visible = m.cCount > 0; im.instanceMatrix.needsUpdate = true; } }
   }
-  const nFloor = metas.length - positions.length;
-  let tries = 0;
-  const floorPts = [];
-  while (floorPts.length < nFloor && tries++ < 20000){
-    const x = (Math.random()*2-1)*(HALF-.2), z = (Math.random()*2-1)*(HALF-.2);
-    if (inKeepout(x,z,.05) || Math.hypot(x-START.x, z-START.z) < .3) continue;
-    if (floorPts.some(p => Math.hypot(p.x-x, p.z-z) < .24)) continue;   // 物同士が重なって生まれないように（重なるとめり込んで床の下に落ちる）
-    floorPts.push({x, z, y:0});
-  }
-  positions.push(...floorPts);
-  for (const p of positions) p.dist = Math.hypot(p.x-START.x, p.z-START.z) + (p.y > .1 ? .5 : 0) + Math.random()*.3;
-  positions.sort((a,b)=>a.dist-b.dist);
-  // 大きい物ほど遠くへ（少しばらつかせる）
-  metas.sort((a,b)=> a.size*(1+Math.random()*.6) - b.size*(1+Math.random()*.6));
-  return metas.slice(0, positions.length).map((meta,i)=>({meta, pos: positions[i]}));
+}
+// 向き q の箱（半分の大きさ hs）を、方向 n に投影したときの半分の長さ
+function support(it, q, n){
+  _m4.makeRotationFromQuaternion(q); const e = _m4.elements;
+  return Math.abs(n.x*e[0]+n.y*e[1]+n.z*e[2])*it.hs.x + Math.abs(n.x*e[4]+n.y*e[5]+n.z*e[6])*it.hs.y + Math.abs(n.x*e[8]+n.y*e[9]+n.z*e[10])*it.hs.z;
+}
+let itemSeq = 0;
+function spawnItem(pl){
+  const m = MODELS[pl.mi];
+  if (!m?.loaded || m.wCount >= m.cap) return null;
+  const k = pl.ts / m.s0;
+  const it = {m, k, size: pl.ts, name: m.name, mat: m.mat, hs: new THREE.Vector3(m.dims.x*k/2, m.dims.y*k/2, m.dims.z*k/2),
+    p: new THREE.Vector3(pl.x, pl.base + m.dims.y*k/2, pl.z), q: new THREE.Quaternion().setFromAxisAngle(UP, pl.yaw),
+    idx: -1, cidx: -1, cell: -1, state: 'world', noStick: 0, body: null, col: null, thrown: false, lp: new THREE.Vector3(), lq: new THREE.Quaternion(),
+    pv: {x:0,y:0,z:0}, pw: {x:0,y:0,z:0}, id: ++itemSeq, pop: -1};
+  addW(it); gridAdd(it);
+  return it;
 }
 
-let loadedCount = 0, totalCount = 0, planList = [];
-async function populate(plan, my){
-  planList = plan; totalCount = plan.length; loadedCount = 0;
+/* =========================================================
+   配置の計画：小さい物はスタート地点の近く、大きい物は遠く。同じモデルを大小さまざまに使い回す
+   ========================================================= */
+function inKeepout(x,z,mg){ return KEEPOUT.some(k => x > k.x0-mg && x < k.x1+mg && z > k.z0-mg && z < k.z1+mg); }
+let yardObst = [];        // 広場の大きな箱 {x0,x1,z0,z1}
+function inYardObst(x,z,mg){ return yardObst.some(k => x > k.x0-mg && x < k.x1+mg && z > k.z0-mg && z < k.z1+mg); }
+function chooseModel(ts){
+  const ok = (lo,hi) => MODELS.map((m,i)=>({m,i,k:ts/m.s0})).filter(o => o.k >= lo && o.k <= hi);
+  let list = null;
+  if (ts >= .07 && (ts > .26 || Math.random() < .4)) list = ok(2.2, ts > 1.2 ? 14 : 9);   // 同じ物の拡大版
+  if (!list || !list.length) list = ok(.45, 1.4);
+  if (!list.length) list = ok(.4, 14);
+  if (!list.length){ let b = null, bd = 1e9; MODELS.forEach((m,i)=>{ const d = Math.abs(Math.log(ts/m.s0)); if (d < bd){ bd = d; b = {m,i}; } }); list = [b]; }
+  const picked = pickWeighted(list.map(o => ({...o, category:o.m.category})));
+  return picked.i;
+}
+let plan = [], byModel = [];
+function genPlan(){
+  plan = []; byModel = MODELS.map(()=>[]);
+  const spacing = new Map();
+  const near = (x,z,fr) => { const cx = Math.floor(x/.5), cz = Math.floor(z/.5);
+    for (let a=-1;a<=1;a++) for (let b=-1;b<=1;b++){ const l = spacing.get((cx+a)*1000+cz+b); if (l) for (const o of l) if (Math.hypot(o.x-x,o.z-z) < (o.r+fr)*.9) return true; } return false; };
+  const mark = (x,z,fr) => { const key = Math.floor(x/.5)*1000+Math.floor(z/.5); (spacing.get(key) || spacing.set(key,[]).get(key)).push({x,z,r:fr}); };
+  const add = (ts,x,z,base,zone) => { const mi = chooseModel(ts); const pl = {mi, ts, x, z, base, yaw: Math.random()*Math.PI*2, zone}; plan.push(pl); byModel[mi].push(pl); };
+  // 台の上（小さな物）
+  for (const s of SURFACES){
+    const cols = Math.ceil(s.n/2);
+    for (let i=0;i<s.n;i++){
+      const c = i % cols, r = Math.floor(i/cols), ts = rand(.02, .075);
+      add(ts, s.x0 + (c+.5+(Math.random()-.5)*.3)/cols*(s.x1-s.x0), s.z0 + (r+.5+(Math.random()-.5)*.3)/2*(s.z1-s.z0), s.top, 'room');
+    }
+  }
+  // 部屋の床：小さい順に、スタート地点から遠くへ
+  const sizes = [];
+  for (const [n,lo,hi] of ROOM_BANDS) for (let i=0;i<n;i++) sizes.push(lo*Math.pow(hi/lo, Math.random()));
+  sizes.sort((a,b)=>a-b);
+  sizes.forEach((ts,i)=>{
+    const f = i/sizes.length, rT = .12 + 4.8*Math.pow(f, 1.3), fr = ts*.42;
+    for (let t=0;t<140;t++){
+      const r = rT*rand(.85,1.15) + (t > 60 ? (t-60)*.05 : 0), th = Math.random()*Math.PI*2;
+      const x = START.x + r*Math.cos(th), z = START.z + r*Math.sin(th);
+      if (Math.abs(x) > HALF-.1-fr || Math.abs(z) > HALF-.1-fr) continue;
+      if (inKeepout(x,z,.03+fr) || near(x,z,fr) || Math.hypot(x-START.x, z-START.z) < .1) continue;
+      mark(x,z,fr); add(ts,x,z,0,'room'); return;
+    }
+  });
+  // 広場：部屋と同じモデルの拡大版が並ぶ
+  const ysizes = [];
+  for (const [n,lo,hi] of YARD_BANDS) for (let i=0;i<n;i++) ysizes.push(lo*Math.pow(hi/lo, Math.random()));
+  ysizes.sort((a,b)=>a-b);
+  ysizes.forEach((ts,i)=>{
+    const f = i/ysizes.length, rT = 2.8 + 5.2*f, fr = ts*.42;
+    for (let t=0;t<80;t++){
+      const r = rT*rand(.85,1.15), th = Math.random()*Math.PI*2, x = r*Math.cos(th), z = r*Math.sin(th);
+      if (Math.abs(x) > YARD_HALF-.5-fr || Math.abs(z) > YARD_HALF-.5-fr) continue;
+      if ((Math.abs(x) < HALF+.3+fr && Math.abs(z) < HALF+.3+fr) || inYardObst(x,z,fr) || near(x,z,fr)) continue;
+      mark(x,z,fr); add(ts,x,z,0,'yard'); return;
+    }
+  });
+}
+function activateModel(mi, zone){ for (const pl of byModel[mi] ?? []) if (pl.zone === 'room' || zone === 'yard') if (!pl.spawned){ if (spawnItem(pl)) pl.spawned = true; } }
+let loadedModels = 0;
+async function loadAll(){
+  const order = [...MODELS.keys()].sort((a,b)=>MODELS[a].s0est - MODELS[b].s0est);
   let next = 0;
   const worker = async () => {
-    while (my === runId && next < plan.length){
-      const it = plan[next++];
-      let entry = null;
-      for (let t=0; t<2 && !entry; t++){ try { entry = await loadEntry(it.meta); } catch(e){ console.warn('load', it.meta.id, e); } }
-      if (my !== runId) return;
-      if (entry) addObject(entry, it.pos);
-      loadedCount++;
-      onProgress();
+    while (next < order.length){
+      const m = MODELS[order[next++]];
+      for (let t=0; t<2 && !m.loaded; t++){ try { await loadModel(m); } catch(e){ console.warn('load', m.meta.id, e); } }
+      if (m.loaded){ activateModel(MODELS.indexOf(m), expanded ? 'yard' : 'room'); }
+      loadedModels++; onProgress();
     }
   };
   await Promise.all(Array.from({length:MAX_FETCH}, worker));
 }
 
 /* =========================================================
+   当たり判定を持つ物（大きすぎてくっつかない物・飛ばされた物）
+   ========================================================= */
+function hullDesc(it, scaleMul = 1){
+  const src = it.m.hull, k = it.k*scaleMul, a = new Float32Array(src.length);
+  for (let i=0;i<a.length;i++) a[i] = src[i]*k;
+  return (a.length >= 12 && RAPIER.ColliderDesc.convexHull(a)) || RAPIER.ColliderDesc.cuboid(it.hs.x*scaleMul, it.hs.y*scaleMul, it.hs.z*scaleMul);
+}
+const itemMass = it => Math.max(.002, MASS_RHO*.35*it.size**3);
+function makeProxy(it, vel){
+  const dyn = it.thrown || it.size < clump.D*4 + .2;
+  const desc = dyn ? RAPIER.RigidBodyDesc.dynamic().setLinearDamping(.5).setAngularDamping(.8).setCanSleep(true) : RAPIER.RigidBodyDesc.fixed();
+  desc.setTranslation(it.p.x,it.p.y,it.p.z).setRotation({x:it.q.x,y:it.q.y,z:it.q.z,w:it.q.w});
+  const body = world.createRigidBody(desc);
+  if (vel) body.setLinvel(vel, true);
+  const m = MAT[it.mat];
+  const cd = hullDesc(it).setRestitution(Math.min(m.rest,.2)).setRestitutionCombineRule(REST_MIN()).setFriction(Math.max(m.fric,.5))
+    .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS | RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS);
+  if (dyn) cd.setMass(Math.min(itemMass(it), Math.max(.002, targetMass(clump.D)*1.2)));   // 押しのけられるよう、かたまりより極端に重くしない
+  it.body = body; it.col = world.createCollider(cd, body); it.dyn = dyn;
+  colliderToObj.set(it.col.handle, it); proxies.add(it);
+}
+function dropProxy(it){
+  if (!it.body) return;
+  if (it.dyn){ const t = it.body.translation(), r = it.body.rotation(); it.p.set(t.x,t.y,t.z); it.q.set(r.x,r.y,r.z,r.w); }
+  colliderToObj.delete(it.col.handle); world.removeRigidBody(it.body);
+  it.body = it.col = null; proxies.delete(it);
+  if (it.state === 'world'){ writeW(it); gridDel(it); gridAdd(it); }
+}
+const nearBuf = [];
+function updateProxies(now){
+  const R = clump.D*2 + .3 + clump.Rmax*.3;
+  for (const it of [...proxies]){
+    if (it.thrown){ if (now > it.noStick + 400 && (it.body.isSleeping() || now > it.noStick + 2000)){ it.thrown = false; dropProxy(it); } continue; }
+    const d = Math.hypot(it.p.x-comW.x, it.p.z-comW.z);
+    if (d > R*1.4 + it.size || it.size < clump.D*STICK_RATIO*.95) dropProxy(it);
+  }
+  if (proxies.size >= MAX_PROXY) return;
+  queryItems(comW.x, comW.z, R + 1.5, nearBuf);
+  const want = [];
+  for (const it of nearBuf){
+    if (it.body || it.state !== 'world' || it.size < clump.D*STICK_RATIO) continue;
+    const d = Math.hypot(it.p.x-comW.x, it.p.z-comW.z) - it.size*.5;
+    if (d < R) want.push([d, it]);
+  }
+  want.sort((a,b)=>a[0]-b[0]);
+  for (const [, it] of want){ if (proxies.size >= MAX_PROXY) break; makeProxy(it); }
+}
+
+/* =========================================================
    くっつける・飛ばす
    ========================================================= */
-const collected = [];      // くっついた物の名前（くっついた順）
+const collected = [];      // くっついた物（くっついた順）
 let streak = 0, lastStickAt = 0;
-function syncBall(){
-  const bp = ballBody.translation(), br = ballBody.rotation();
-  ballGroup.position.set(bp.x,bp.y,bp.z); ballGroup.quaternion.set(br.x,br.y,br.z,br.w);
+const ray = new RAPIER.Ray({x:0,y:0,z:0},{x:0,y:1,z:0});
+const clumpOnly = c => c.parent() === ballBody;
+const popping = new Set();
+function quantile75(arr){ arr.sort((a,b)=>a-b); return arr[Math.min(arr.length-1, Math.floor((arr.length-1)*SIZE_Q))]; }
+// かたまりの大きさを、くっついた物の実際の広がりから測り直す
+const distBuf = [];
+function recompute(){
+  if (!stuck.length){ clump.cl.set(0,0,0); clump.R = clump.Rmax = D0/2; }
+  else {
+    let w = clump.coreR**3*2, sx = 0, sy = 0, sz = 0;
+    for (const s of stuck){ const wi = s.it.size**3; w += wi; sx += s.c.x*wi; sy += s.c.y*wi; sz += s.c.z*wi; }
+    clump.cl.set(sx/w, sy/w, sz/w);
+    distBuf.length = 0; let mx = 0;
+    for (const s of stuck){ const d = s.c.distanceTo(clump.cl) + s.it.size*.4; distBuf.push(d); if (d > mx) mx = d; }
+    clump.R = Math.max(D0/2, quantile75(distBuf)); clump.Rmax = Math.max(clump.R, mx);
+  }
+  clump.D = clump.R*2;
+  if (clump.D > clump.maxD) clump.maxD = clump.D;
+  const cr = Math.max(D0/2, CORE_FRAC*clump.R*Math.min(1, clump.dropped/CORE_RAMP));
+  const old = clump.coreR;
+  setCore(cr);
+  if (cr > old){ const t = ballBody.translation(); if (t.y < cr + .002) ballBody.setTranslation({x:t.x, y: cr + .004, z:t.z}, true); }   // 床にめり込まないよう持ち上げる
+  // ネバネバの見た目：物が増えるほど小さくなり、15個くらいで見えなくなる（物の山に隠れる）
+  const gv = Math.max(.007, Math.min(cr, GLUE_VIS*clump.R))*Math.max(0, 1 - stuck.length/15);
+  coreMesh.visible = gv > .002; coreMesh.scale.setScalar(Math.max(gv, .001));
+  checkMilestones();
 }
-function stickObject(o){
-  if (o.stuck || !o.body) return;
-  syncBall();                                      // 描画より物理の方が先に進んでいるので、玉の位置を最新にする
-  const t = o.body.translation(), r = o.body.rotation();
-  o.mesh.position.set(t.x,t.y,t.z); o.mesh.quaternion.set(r.x,r.y,r.z,r.w);
-  o.mesh.updateMatrixWorld(true); ballGroup.updateMatrixWorld(true);
-  colliderToObj.delete(o.col.handle); world.removeRigidBody(o.body); o.body = o.col = null;
-  o.stuck = true;
-  ballGroup.attach(o.mesh);                        // 見た目の向きを保ったまま玉の子にする
-  const R = ball.d/2, size = o.size;
-  _c.copy(o.entry.center).applyQuaternion(o.mesh.quaternion).add(o.mesh.position);   // 玉の座標での物の中心
-  const dist = Math.max(_c.length(), .001);
-  const dir = _c.clone().multiplyScalar(1/dist);
-  const extra = clamp(dist - R - size*PUSH_IN, -size*.35, size*.3);   // 少し表面にめり込ませる
-  const s = {o, dir, extra, offset: o.mesh.position.clone().sub(_c), lump:null, vol: VOL_COEF*size**3};
-  // 当たり判定（球）を付ける。多くなりすぎたら古い物のは外す
-  const lc = world.createCollider(RAPIER.ColliderDesc.ball(Math.max(size*LUMP_R,.004)).setDensity(0).setFriction(.9).setRestitution(.1).setRestitutionCombineRule(REST_MIN())
-    .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS), ballBody);
-  colliderToObj.set(lc.handle, 'ball'); s.lump = lc;
+const rnd3 = () => _v2.set(Math.random()-.5, Math.random()-.5, Math.random()-.5).normalize();
+function attach(it, hit){
+  if (it.body){ it.thrown = false; dropProxy(it); }
+  gridDel(it); removeW(it); it.state = 'stuck';
+  const pos = _v.copy(it.p), q = _q.copy(it.q);
+  if (hit){
+    const n = hit.n;
+    // 向き：細長い物は半分くらいの確率で外向きにとがらせる（シルエットをトゲトゲに）。ほかは少しだけ回す
+    const hx = it.hs.x, hy = it.hs.y, hz = it.hs.z, mx = Math.max(hx,hy,hz), mid = hx+hy+hz - mx - Math.min(hx,hy,hz);
+    const li = hx === mx ? 0 : hy === mx ? 1 : 2;
+    if (mx/Math.max(mid,1e-4) > 1.8 && Math.random() < .55){
+      const a = _v2.set(li===0?1:0, li===1?1:0, li===2?1:0).applyQuaternion(q);
+      if (a.dot(n) < 0) a.negate();
+      q.premultiply(_q2.setFromUnitVectors(a, n));
+    }
+    q.premultiply(_q2.setFromAxisAngle(rnd3(), rand(.05,.3)));
+    const h = support(it, q, n), ov = clamp((OVERLAP + .17*Math.max(0, 1 - stuck.length/20))*it.size, 0, h*.85);   // 最初の十数個だけ少し深めに（すき間をなくす）
+    pos.copy(hit.p).addScaledVector(n, h - ov);
+    const hy2 = support(it, q, UP); if (pos.y < hy2) pos.y = hy2;      // 床の下にはもぐらせない
+  }
+  it.p.copy(pos); it.q.copy(q);
+  // かたまりの座標へ
+  const inv = _q2.copy(bodyQ).invert();
+  it.lp.copy(pos).sub(bodyPos).applyQuaternion(inv); it.lq.copy(inv).multiply(q);
+  addC(it); it.pop = performance.now(); popping.add(it);
+  // 当たり判定（古い物から外す）
+  const hm = itemMass(it);
+  const cd = hullDesc(it).setTranslation(it.lp.x,it.lp.y,it.lp.z).setRotation({x:it.lq.x,y:it.lq.y,z:it.lq.z,w:it.lq.w})
+    .setFriction(.9).setRestitution(.1).setRestitutionCombineRule(REST_MIN()).setMass(hm)
+    .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS | RAPIER.ActiveEvents.COLLISION_EVENTS);
+  const s = {it, c: it.lp.clone(), hull: world.createCollider(cd, ballBody), hm, hidden: false};
+  colliderToObj.set(s.hull.handle, 'ball'); clump.hullMass += hm;
   stuck.push(s);
-  if (stuck.length > MAX_LUMPS){ const old = stuck[stuck.length-1-MAX_LUMPS]; if (old.lump){ colliderToObj.delete(old.lump.handle); world.removeCollider(old.lump, false); old.lump = null; } }
-  ball.vol += s.vol;
-  collected.push(o.name);
-  setDiameter(Math.cbrt(D0**3 + GROW_K*ball.vol));
-  placeStuck(s, ball.d/2);
-  onStuck(o);
+  trimHulls();
+  collected.push(it);
+  recompute();
+  dust(pos, it.size);
+  onStuck(it);
+}
+function dropHull(s){ if (!s.hull) return; colliderToObj.delete(s.hull.handle); world.removeCollider(s.hull, false); s.hull = null; clump.hullMass -= s.hm; clump.dropped++; }
+function trimHulls(){
+  let n = 0; for (const s of stuck) if (s.hull) n++;
+  while (n > MAX_HULLS){
+    // 古い物のうち、いちばん内側に埋まっているものから外す（とがった古い物は残す）
+    let best = null, bd = 1e9, seen = 0;
+    for (let i=0; i<stuck.length && seen < 16; i++){ const s = stuck[i]; if (!s.hull) continue; seen++;
+      const d = (s.c.length() + s.it.size*.4)/Math.max(clump.R,1e-3); if (d < bd){ bd = d; best = s; } }
+    dropHull(best); n--;
+  }
 }
 // 大きな物にぶつかったとき、最近くっついた物を何個か飛ばす
 let lastKnock = 0;
-function knockOff(n, from){
+function knockOff(n){
   const now = performance.now();
   if (now - lastKnock < 1200) return;
   lastKnock = now;
-  const bp = ballBody.translation(), bv = ballBody.linvel();
+  const bv = ballBody.linvel();
   for (let i=0; i<n && stuck.length; i++){
-    const s = stuck.pop(), o = s.o;
-    if (s.lump){ colliderToObj.delete(s.lump.handle); world.removeCollider(s.lump, false); s.lump = null; }
-    scene.attach(o.mesh);
-    const dir = new THREE.Vector3(o.mesh.position.x-bp.x, 0, o.mesh.position.z-bp.z); if (dir.lengthSq() < 1e-6) dir.set(Math.random()-.5,0,Math.random()-.5); dir.normalize();
-    spawnBody(o, o.mesh.position, o.mesh.quaternion, {x: dir.x*1.4 + bv.x*.3 + (Math.random()-.5), y: 1.6 + Math.random(), z: dir.z*1.4 + bv.z*.3 + (Math.random()-.5)});
-    o.noStick = now + 1800;
-    ball.vol -= s.vol;
-    const k = collected.lastIndexOf(o.name); if (k >= 0) collected.splice(k,1);
+    const s = stuck.pop(), it = s.it;
+    dropHull(s); removeC(it);
+    // 世界の姿勢に戻す
+    it.p.copy(it.lp).applyQuaternion(bodyQ).add(bodyPos); it.q.copy(bodyQ).multiply(it.lq);
+    it.state = 'world'; it.pop = -1; popping.delete(it);
+    const dir = _v2.set(it.p.x-comW.x, 0, it.p.z-comW.z); if (dir.lengthSq() < 1e-6) dir.set(Math.random()-.5,0,Math.random()-.5); dir.normalize();
+    it.thrown = true; it.noStick = now + 1700;
+    addW(it); gridAdd(it);
+    makeProxy(it, {x: dir.x*1.4 + bv.x*.3 + (Math.random()-.5), y: 1.4 + Math.random(), z: dir.z*1.4 + bv.z*.3 + (Math.random()-.5)});
+    const k = collected.indexOf(it); if (k >= 0) collected.splice(k,1);
   }
-  setDiameter(Math.cbrt(D0**3 + GROW_K*Math.max(0,ball.vol)));
-  updateHud();
-  popDown();
+  recompute(); updateHud(); popDown();
+}
+// 小さくて深く埋まった物は描かない（出っぱった物は描く）
+function cullBuried(){
+  for (const s of stuck){
+    if (s.hidden || s.it.size > clump.D*BURY_RATIO) continue;
+    if (s.c.distanceTo(clump.cl) < clump.R*.55){ s.hidden = true; removeC(s.it); }
+  }
+}
+
+/* =========================================================
+   砂ぼこり（Points 1つで描く）
+   ========================================================= */
+const DUST_N = 128;
+const dustPos = new Float32Array(DUST_N*3), dustLife = new Float32Array(DUST_N), dustSize = new Float32Array(DUST_N), dustVel = new Float32Array(DUST_N*3);
+const dustGeo = new THREE.BufferGeometry();
+dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3).setUsage(THREE.DynamicDrawUsage));
+dustGeo.setAttribute('aLife', new THREE.BufferAttribute(dustLife, 1).setUsage(THREE.DynamicDrawUsage));
+dustGeo.setAttribute('aSize', new THREE.BufferAttribute(dustSize, 1).setUsage(THREE.DynamicDrawUsage));
+const dustMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, uniforms: {uScale: {value: 600}},
+  vertexShader: `attribute float aLife; attribute float aSize; varying float vL; uniform float uScale;
+    void main(){ vL = aLife; vec4 mv = modelViewMatrix*vec4(position,1.); gl_PointSize = aSize*uScale/max(-mv.z,.01)*(1.4-aLife*.6); gl_Position = projectionMatrix*mv; }`,
+  fragmentShader: `varying float vL; void main(){ vec2 c = gl_PointCoord-.5; float r = length(c); if (r > .5 || vL <= 0.) discard; gl_FragColor = vec4(.95,.92,.85,(1.-r*2.)*.6*vL); }`
+});
+const dust3 = new THREE.Points(dustGeo, dustMat); dust3.frustumCulled = false; scene.add(dust3);
+let dustNext = 0;
+function dust(p, size){
+  for (let i=0;i<7;i++){
+    const j = dustNext; dustNext = (dustNext+1) % DUST_N;
+    dustPos[j*3] = p.x; dustPos[j*3+1] = p.y; dustPos[j*3+2] = p.z;
+    const sp = (.25 + Math.random()*.5)*Math.max(.04, size)*3;
+    dustVel[j*3] = (Math.random()-.5)*sp; dustVel[j*3+1] = Math.random()*sp*.9; dustVel[j*3+2] = (Math.random()-.5)*sp;
+    dustLife[j] = 1; dustSize[j] = Math.max(.012, size*.55)*(.7+Math.random()*.6);
+  }
+}
+function updateDust(dt){
+  let any = false;
+  for (let i=0;i<DUST_N;i++){
+    if (dustLife[i] <= 0) continue; any = true;
+    dustLife[i] -= dt/.55;
+    dustPos[i*3] += dustVel[i*3]*dt; dustPos[i*3+1] += dustVel[i*3+1]*dt; dustPos[i*3+2] += dustVel[i*3+2]*dt;
+    dustVel[i*3] *= .94; dustVel[i*3+1] *= .94; dustVel[i*3+2] *= .94;
+  }
+  dust3.visible = any;
+  if (any){ dustGeo.attributes.position.needsUpdate = dustGeo.attributes.aLife.needsUpdate = dustGeo.attributes.aSize.needsUpdate = true; }
+}
+// くっついた物の「ポンッ」アニメ（小さい → ちょっと大きい → 元の大きさ）
+const easeBack = t => 1 + 2.4*Math.pow(t-1,3) + 1.4*Math.pow(t-1,2);
+function updatePop(now){
+  for (const it of popping){
+    const t = (now - it.pop)/1000/POP_TIME;
+    if (t >= 1 || it.cidx < 0){ if (it.cidx >= 0) writeC(it, 1); popping.delete(it); continue; }
+    writeC(it, .45 + .55*easeBack(Math.max(0, t)));
+  }
 }
 
 /* =========================================================
@@ -511,13 +722,14 @@ function blip(f0, f1, dur, vol, type='sine'){
 function popUp(){ const now = performance.now(); streak = now - lastStickAt < 900 ? Math.min(streak+1, 12) : 0; lastStickAt = now;
   const f = 380 * Math.pow(2, streak/12); blip(f, f*1.7, .1, .13); }
 function popDown(){ blip(520, 160, .25, .12, 'triangle'); }
+function wallSound(){ blip(140, 38, 1.1, .3, 'sawtooth'); blip(90, 30, 1.4, .3, 'sine'); for (let i=0;i<4;i++) setTimeout(()=>ring(MAT.wood, .5, .5, .4, (i%2?1:-1)*.4), 250+i*180); }
 const tmpV = new THREE.Vector3();
-const panOf = o => { tmpV.copy(o.mesh.position); if (o.mesh.parent) o.mesh.getWorldPosition(tmpV); tmpV.project(camera); return clamp(tmpV.x,-1,1)*.7; };
+const panOf = o => { if (o === ballObj) tmpV.copy(comW); else tmpV.copy(o.p); tmpV.project(camera); return clamp(tmpV.x,-1,1)*.7; };
 function impactOf(o){
   const v = o.body.linvel(), w = o.body.angvel();
   return Math.hypot(v.x-o.pv.x, v.y-o.pv.y, v.z-o.pv.z) + Math.hypot(w.x-o.pw.x, w.y-o.pw.y, w.z-o.pw.z)*o.size*.5;
 }
-const surfOf = tag => tag === 'floor' ? FLOOR.woodfloor : MAT.wood;
+const surfOf = tag => tag === 'floor' ? {color:0, rest:.4, fric:.55, hard:.6, f0:170, modes:[[1,1],[2.4,.4],[3.9,.2]], decay:.14, ring:.7, noise:.5} : MAT.wood;
 const THRESH = .3, COOLDOWN = 70, lastHit = new Map();
 function onContact(a, b){
   if (typeof a === 'string') [a,b] = [b,a];
@@ -531,7 +743,7 @@ function onContact(a, b){
   lastHit.set(key, now);
   const base = Math.pow(clamp((s-THRESH)/3, 0, 1), 1.2) * .5;
   const massAmp = o => clamp(Math.sqrt(o.body.mass()/.3), .35, 1.6);
-  const sizeOf = o => o === ballObj ? clamp(ball.d, .05, .3) : (o.entry?.realSize ?? o.size);
+  const sizeOf = o => o === ballObj ? clamp(clump.D, .05, .3) : (o.m?.realSize ?? o.size);
   const mA = MAT[a.mat];
   if (typeof b === 'string'){
     const surf = surfOf(b);
@@ -545,38 +757,85 @@ function onContact(a, b){
 }
 
 /* =========================================================
+   広場（壁がたおれると広がる）
+   ========================================================= */
+let expanded = false, fallT = -1;
+function boundHalf(){ return expanded ? YARD_HALF : HALF; }
+function expandWorld(){
+  if (expanded) return;
+  expanded = true; fallT = performance.now();
+  removeCols(wallCols);
+  yardMesh.visible = true;
+  wallSound(); toast('部屋を飛び出した！');
+  // 広場の大きな箱と、まわりの生け垣
+  yardObst = [];
+  for (let i=0, t=0; i<9 && t<200; t++){
+    const w = rand(.5,2.2), d = rand(.5,2.2), h = rand(.3,1.4), x = rand(-6.8,6.8), z = rand(-6.8,6.8);
+    if (Math.abs(x) < HALF+.8+w/2 && Math.abs(z) < HALF+.8+d/2) continue;
+    if (yardObst.some(o => x+w/2+.5 > o.x0 && x-w/2-.5 < o.x1 && z+d/2+.5 > o.z0 && z-d/2-.5 < o.z1)) continue;
+    const col = [0xd9a066,0x7aa6c2,0xc47a8a,0x8fb36b,0xe0c070][i%5];
+    addBox(x, h/2, z, w, h, d, col); yardCols.push(fixedBox(x, h/2, z, w/2, h/2, d/2, 'furn'));
+    yardObst.push({x0:x-w/2, x1:x+w/2, z0:z-d/2, z1:z+d/2}); i++;
+  }
+  const Y = YARD_HALF;
+  for (const [x,z,sx,sz] of [[0,-Y-.25,Y*2+1,.5],[0,Y+.25,Y*2+1,.5],[-Y-.25,0,.5,Y*2],[Y+.25,0,.5,Y*2]]){
+    addBox(x, .6, z, sx, 1.2, sz, 0x5f9a4a); yardCols.push(fixedBox(x, 4, z, sx/2, 4, sz/2, 'wall'));
+  }
+  if (!yardPlanDone){ yardPlanDone = true; }
+  for (let mi=0; mi<MODELS.length; mi++) activateModel(mi, 'yard');
+}
+let yardPlanDone = false;
+function updateFall(now){
+  if (fallT < 0) return;
+  const t = clamp((now - fallT)/1000/1.1, 0, 1), a = (Math.PI/2)*t*t;
+  for (const w of walls){ if (w.axis === 'x') w.pivot.rotation.x = w.sign*a; else w.pivot.rotation.z = w.sign*a; }
+  if (t >= 1) fallT = -1;
+}
+
+/* =========================================================
    ゲームの状態
    'loading' 準備中 / 'play' 遊んでいる / 'over' 終了
    ========================================================= */
 let state = 'loading', started = false, timeLeft = TIME_LIMIT;
 let best = null;
-try { best = JSON.parse(localStorage.getItem('toybox-roll-best') || 'null'); } catch(e){}
+try { const b = JSON.parse(localStorage.getItem('toybox-roll-best') || 'null'); if (b && typeof b.d === 'number' && isFinite(b.d)) best = {d: b.d, count: b.count ?? 0}; } catch(e){}   // 古い形式（{d,count,clear}）も d を使えるので読める
 const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let toastTimer, gotTimer;
-function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.opacity=1; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.style.opacity=0, 2200); }
-function onStuck(o){
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.opacity=1; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.style.opacity=0, 2400); }
+let msIndex = 0;
+function checkMilestones(){
+  while (msIndex < MILESTONES.length && clump.maxD >= MILESTONES[msIndex][0]){
+    const [d, msg] = MILESTONES[msIndex++];
+    if (d >= EXPAND_AT && !expanded) expandWorld(); else toast(msg);
+  }
+}
+function onStuck(it){
   updateHud();
-  const sz = Math.max(o.entry.realSize, .03);
-  ring(MAT[o.mat], sz, .28, MAT.fabric.hard, panOf(o));
+  ring(MAT[it.mat], Math.max(it.m.realSize ?? it.size, .03), .28, MAT.fabric.hard, panOf(it));
   popUp();
-  $('gotImg').src = thumbUrl(o.entry.id); $('gotName').textContent = o.name;
+  $('gotImg').src = thumbUrl(it.m.meta.id); $('gotName').textContent = it.name;
   $('got').style.opacity = 1; clearTimeout(gotTimer); gotTimer = setTimeout(()=>$('got').style.opacity = 0, 1400);
 }
 function fmtTime(t){ t = Math.max(0, Math.ceil(t)); return `${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`; }
+const fmtSize = d => d < 1 ? [(d*100).toFixed(1), 'cm'] : [d.toFixed(2), 'm'];
 function updateHud(){
-  $('hDia').textContent = (ball.d*100).toFixed(1);
-  $('progBar').style.width = `${clamp((ball.d-D0)/(GOAL-D0), 0, 1)*100}%`;
+  const [v,u] = fmtSize(clump.D);
+  $('hDia').textContent = v; $('hUnit').textContent = u;
+  const nx = MILESTONES.find(m => m[0] > clump.maxD), pv = MILESTONES.filter(m => m[0] <= clump.maxD).pop();
+  const lo = Math.log(pv ? pv[0] : D0), hi = Math.log(nx ? nx[0] : 8);
+  $('progBar').style.width = `${clamp((Math.log(Math.max(clump.D,D0)) - lo)/(hi-lo), 0, 1)*100}%`;
+  $('hNext').textContent = nx ? `つぎ：${fmtSize(nx[0]).join(' ')}` : '';
   $('hCount').textContent = `くっついた物 ${collected.length} 個`;
-  $('hBest').textContent = best ? `ベスト ${(best.d*100).toFixed(1)} cm${best.clear ? '（クリア）' : ''}` : '';
+  $('hBest').textContent = best ? `ベスト ${fmtSize(best.d).join(' ')}` : '';
   $('hTime').textContent = fmtTime(timeLeft);
   $('timer').classList.toggle('low', timeLeft <= 30);
 }
 function onProgress(){
-  const need = Math.min(START_READY, totalCount);
+  const need = Math.min(START_READY, MODELS.length);
   if (state === 'loading'){
-    $('startMsg').textContent = loadedCount >= need ? '準備できました' : `読み込み中… ${loadedCount} / ${need}`;
-    $('loadmsg').textContent = `部屋を準備中… ${loadedCount} / ${need}`;
-    if (loadedCount >= need && started) beginPlay();
+    $('startMsg').textContent = loadedModels >= need ? '準備できました' : `読み込み中… ${loadedModels} / ${need}`;
+    $('loadmsg').textContent = `部屋を準備中… ${loadedModels} / ${need}`;
+    if (loadedModels >= need && started) beginPlay();
     $('startBtn').disabled = false;
   }
 }
@@ -586,32 +845,47 @@ function beginPlay(){
   $('start').style.display = 'none'; $('loadmsg').style.display = 'none';
   updateHud();
 }
-function finish(win){
+function finish(){
   if (state !== 'play') return;
-  state = 'over';
-  const d = ball.d, count = collected.length;
-  const isBest = !best || (win && !best.clear) || (!!win === !!best.clear && d > best.d);
-  if (isBest){ best = {d, count, clear: win}; try { localStorage.setItem('toybox-roll-best', JSON.stringify(best)); } catch(e){} }
+  state = 'over'; updateHud();
+  const d = clump.maxD, count = collected.length;
+  const isBest = !best || d > best.d;
+  if (isBest){ best = {d, count}; try { localStorage.setItem('toybox-roll-best', JSON.stringify(best)); } catch(e){} }
+  const names = new Map(); for (const it of collected) names.set(it.name, (names.get(it.name) || 0) + 1);
+  const list = [...names].sort((a,b)=>b[1]-a[1]);
   setTimeout(()=>{
-    $('ovTitle').textContent = win ? 'お部屋ぴかぴか！クリア！' : 'じかんぎれ…';
-    $('ovScore').textContent = `${(d*100).toFixed(1)} cm`;
-    $('ovDetail').innerHTML = `くっついた物 ${count} 個${win ? `　のこり ${fmtTime(timeLeft)}` : `　（目標まであと ${((GOAL-d)*100).toFixed(1)} cm）`}${isBest ? '　<b>ベスト更新！</b>' : ''}`;
-    $('ovList').innerHTML = collected.map((n,i)=>`<li>${i+1}. ${esc(n)}</li>`).reverse().join('');
+    $('ovTitle').textContent = d >= EXPAND_AT ? 'じかんぎれ！ 大きく育ったね' : 'じかんぎれ…';
+    $('ovScore').textContent = fmtSize(d).join(' ');
+    $('ovDetail').innerHTML = `くっついた物 ${count} 個（${list.length} 種類）<br>${isBest ? '<b>ベスト更新！</b>' : `ベスト ${fmtSize(best.d).join(' ')}`}`;
+    $('ovList').innerHTML = list.map(([n,c])=>`<li>${esc(n)}${c > 1 ? ` ×${c}` : ''}</li>`).join('');
     $('over').style.display = 'flex';
   }, 900);
 }
-async function restart(){
-  $('over').style.display = 'none';
-  const my = ++runId;
-  state = 'loading'; started = true;
-  clearRoom();
-  collected.length = 0; ball.vol = 0; ball.d = D0;
-  core.setRadius(D0/2); core.setMass(ballMass(D0)); coreMesh.scale.setScalar(D0/2);
+// 最初の状態に戻す（モデルは読み込み済みのまま使い回す）
+function resetWorld(){
+  for (const it of [...proxies]){ it.thrown = false; dropProxy(it); }
+  for (const s of stuck) dropHull(s);
+  stuck.length = 0; collected.length = 0; popping.clear(); worldCount = 0;
+  for (const g of grid) g.length = 0;
+  for (const m of MODELS){ if (!m.loaded) continue; for (const im of [...m.wMeshes, ...m.cMeshes]){ im.count = 0; im.visible = false; } m.wCount = m.cCount = 0; m.wSlots = []; m.cSlots = []; }
+  removeCols(yardCols); removeCols(wallCols); makeWallCols();
+  boxMesh.count = ROOM_BOXES; boxMesh.boundingSphere = null; yardObst = [];
+  yardMesh.visible = false; expanded = false; fallT = -1; yardPlanDone = false;
+  for (const w of walls){ w.pivot.rotation.set(0,0,0); }
+  clump.D = D0; clump.R = clump.Rmax = D0/2; clump.hullMass = 0; clump.dropped = 0; clump.maxD = D0; clump.cl.set(0,0,0); msIndex = 0;
+  setCore(D0/2); coreMesh.scale.setScalar(D0/2);
   ballBody.setTranslation({x:START.x, y:D0/2+.01, z:START.z}, true); ballBody.setLinvel({x:0,y:0,z:0}, true); ballBody.setAngvel({x:0,y:0,z:0}, true);
   ballBody.setRotation({x:0,y:0,z:0,w:1}, true);
-  timeLeft = TIME_LIMIT; updateHud();
-  $('loadmsg').style.display = 'block';
-  await populate(makePlan(), my);
+  readBody();
+  dustLife.fill(0);
+  if (MODELS.length){ genPlan(); for (let mi=0; mi<MODELS.length; mi++) activateModel(mi, 'room'); }
+  timeLeft = TIME_LIMIT; supplyCount = 0; updateHud();
+}
+function restart(){
+  $('over').style.display = 'none';
+  resetWorld();
+  state = 'loading'; started = true; onProgress();
+  if (state === 'loading') beginPlay();
 }
 
 /* =========================================================
@@ -643,7 +917,9 @@ addEventListener('keydown', e=>{ keys.add(e.code); if (e.code.startsWith('Arrow'
 addEventListener('keyup', e=>keys.delete(e.code));
 addEventListener('blur', ()=>keys.clear());
 $('retryBtn').onclick = restart;
-addEventListener('resize', ()=>{ camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+addEventListener('resize', ()=>{ camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); updateDustScale(); });
+function updateDustScale(){ dustMat.uniforms.uScale.value = renderer.getPixelRatio()*innerHeight/(2*Math.tan(camera.fov*Math.PI/360)); }
+updateDustScale();
 if (!coarse) $('hint').textContent = 'WASD / 矢印：転がす　Q・E：視点';
 
 // 画面の入力 → 世界での移動方向
@@ -660,86 +936,187 @@ function inputDir(){
   return mv.set(0,0,0).addScaledVector(rgt, x).addScaledVector(fwd, y);
 }
 // テスト用の自動操縦：いちばん近い「くっつけられる物」へ向かう
-const dbg = { auto:false, target:null, obj:null, ign:new Map(), idle:0 };
+const dbg = { auto:false, target:null, ign:new Map(), idle:0, tick:0, wd:0, lastD:1e9 };
+const autoBuf = [];
 function autoDir(){
-  const bp = ballBody.translation(), now = performance.now(); let best = null, bd = 1e9;
+  const now = performance.now();
   const v = ballBody.linvel();
-  dbg.idle = Math.hypot(v.x,v.z) < .05 ? dbg.idle+1 : 0;
-  if (dbg.idle > 90 && dbg.obj){ dbg.ign.set(dbg.obj, now+15000); dbg.idle = 0; }   // 進めないときは、その物をしばらくあきらめる
-  for (const o of objs){
-    if (o.stuck || !o.body || o.size >= ball.d*STICK_RATIO*.95 || (dbg.ign.get(o) ?? 0) > now) continue;
-    const t = o.body.translation(); if (t.y > .1 && ball.d < .3) continue;
-    const dd = Math.hypot(t.x-bp.x, t.z-bp.z); if (dd < bd){ bd = dd; best = t; dbg.obj = o; }
+  dbg.idle = Math.hypot(v.x,v.z) < .05*(1+clump.D) ? dbg.idle+1 : 0;
+  if (dbg.idle > 90 && dbg.target){ dbg.ign.set(dbg.target, now+15000); dbg.target = null; dbg.idle = 0; }   // 進めないときは、その物をしばらくあきらめる
+  if (dbg.target && (dbg.target.state !== 'world' || dbg.target.size >= clump.D*STICK_RATIO*.95)) dbg.target = null;
+  if (dbg.target && ++dbg.wd % 120 === 0){   // 3秒たっても近づけない物はあきらめる
+    const dd = Math.hypot(dbg.target.p.x-comW.x, dbg.target.p.z-comW.z);
+    if (dd > dbg.lastD - .02){ dbg.ign.set(dbg.target, now+20000); dbg.target = null; }
+    dbg.lastD = dd;
   }
-  dbg.target = best;
-  if (!best) return mv.set(0,0,0);
-  return mv.set(best.x-bp.x, 0, best.z-bp.z).normalize();
+  if (!dbg.target || ++dbg.tick % 20 === 0){
+    let best = null, bd = 1e9;
+    for (const r of [1, 2.5, 6, 20]){
+      queryItems(comW.x, comW.z, r*Math.max(1, clump.D*2), autoBuf);
+      for (const it of autoBuf){
+        if (it.state !== 'world' || it.size >= clump.D*STICK_RATIO*.9 || it.size < clump.D*.03 || (dbg.ign.get(it) ?? 0) > now) continue;
+        if (it.p.y > .1 && clump.D < .3) continue;
+        const dd = Math.hypot(it.p.x-comW.x, it.p.z-comW.z) - it.size*8; if (dd < bd){ bd = dd; best = it; }
+      }
+      if (best) break;
+    }
+    dbg.target = best;
+  }
+  const t = dbg.target;
+  if (!t) return mv.set(-comW.x, 0, -comW.z).normalize();
+  return mv.set(t.p.x-comW.x, 0, t.p.z-comW.z).normalize();
+}
+
+/* =========================================================
+   補充：まわりに「ちょうどいい大きさ」の物が少なくなったら、少し離れたところに出す
+   ========================================================= */
+let supplyCount = 0;
+const supBuf = [];
+function supply(){
+  const D = clump.D;
+  queryItems(comW.x, comW.z, D*5 + 1, supBuf);
+  let ok = 0; for (const it of supBuf) if (it.state === 'world' && it.size > D*.06 && it.size < D*STICK_RATIO*.95) ok++;
+  if (ok >= 14 || supplyCount > 500) return;
+  const bh = boundHalf() - .4;
+  for (let i=0;i<8;i++){
+    for (let t=0;t<12;t++){
+      const r = D*rand(2.5, 5) + .3, th = Math.random()*Math.PI*2, x = comW.x + r*Math.cos(th), z = comW.z + r*Math.sin(th);
+      if (Math.abs(x) > bh || Math.abs(z) > bh) continue;
+      if (!expanded && inKeepout(x,z,.05)) continue;
+      if (expanded && (inYardObst(x,z,.1) || (Math.abs(x) < HALF+.2 && Math.abs(z) < HALF+.2 && false))) continue;
+      const ts = D*Math.pow(.42/.1, Math.random())*.1 + D*.04;
+      const mi = chooseModel(ts);
+      if (spawnItem({mi, ts, x, z, base:0, yaw: Math.random()*Math.PI*2})){ supplyCount++; break; }
+    }
+  }
 }
 
 /* =========================================================
    物理の1ステップ
    ========================================================= */
+function syncProxies(){
+  for (const it of proxies){
+    if (!it.dyn || it.body.isSleeping()) continue;
+    const p=it.body.translation(), r=it.body.rotation(); it.p.set(p.x,p.y,p.z); it.q.set(r.x,r.y,r.z,r.w);
+    if (it.state === 'world') writeW(it);
+  }
+}
 const bpv = {x:0,y:0,z:0};
+let stall = 0, stuckN = 0;
+const candBuf = [];
+let stepNo = 0;
 function stepPhysics(){
-  // 玉を動かす：目標の速さに近づく向きへ力を加える
+  const now = performance.now();
+  readBody();
+  // かたまりを動かす：進みたい向きへ転がす回転と、少しの押す力（大きさに合わせて質量ぶん強くする）
   const v0 = ballBody.linvel(); bpv.x = v0.x; bpv.y = v0.y; bpv.z = v0.z;
   if (state === 'play'){
     const dir = dbg.auto ? autoDir() : inputDir();
     const mag = Math.min(1, dir.length());
     if (mag > 0){
-      const vmax = (1.2 + 3.2*ball.d) * mag, m = ballBody.mass();
-      const ax = clamp((dir.x/mag*vmax - v0.x)*6, -10, 10), az = clamp((dir.z/mag*vmax - v0.z)*6, -10, 10);
-      ballBody.applyImpulse({x:ax*m*DT, y:0, z:az*m*DT}, true);
-    }
+      const D = Math.max(clump.D, .03), R = D/2, vmax = Math.min(1.3 + 2.2*D, 5.5) * mag, m = ballBody.mass() || targetMass(D);
+      const dx = dir.x/mag, dz = dir.z/mag;
+      // 転がり：進行方向 × 上 の軸まわりの回転へ近づけるトルク（出っぱった形でも乗りこえられるよう、重さ×半径までの強さ）
+      const w = ballBody.angvel(), wm = vmax/(R*.9);
+      const I = .4*m*R*R;
+      let tx = I*(dz*wm - w.x)*12, tz = I*(-dx*wm - w.z)*12;
+      const tm = Math.hypot(tx,tz), tmax = m*9.81*R*1.0;
+      if (tm > tmax){ tx *= tmax/tm; tz *= tmax/tm; }
+      ballBody.applyTorqueImpulse({x:tx*DT, y:0, z:tz*DT}, true);
+      // 押す力（質量にあわせる）
+      const acc = 4 + 10*D;
+      const ax = clamp((dx*vmax - v0.x)*5, -acc, acc), az = clamp((dz*vmax - v0.z)*5, -acc, acc);
+      ballBody.applyImpulse({x:ax*m*DT*.5, y:0, z:az*m*DT*.5}, true);
+      // 引っかかって動けないときは、ぴょんと跳ねて抜け出す
+      stall = Math.hypot(v0.x, v0.z) < .12*vmax ? stall+1 : 0;
+      if (stall > 50){
+        stuckN++;
+        if (stuckN % 3 === 0){ const a = Math.random()*Math.PI*2; ballBody.applyImpulse({x:Math.cos(a)*m*1.5, y:m*Math.min(2.5+3*D, 4), z:Math.sin(a)*m*1.5}, true); }   // 何度もだめなら、ランダムな向きへ大きく跳ねる
+        else ballBody.applyImpulse({x:dx*m*.5, y:m*Math.min(1.2+2*D, 2.5), z:dz*m*.5}, true);
+        stall = 0;
+      }
+    } else { stall = 0; stuckN = 0; }
   }
-  for (const o of objs){ if (o.body && !o.body.isSleeping()){ const v=o.body.linvel(), w=o.body.angvel(); o.pv={x:v.x,y:v.y,z:v.z}; o.pw={x:w.x,y:w.y,z:w.z}; } }
+  for (const it of proxies){ if (it.dyn && !it.body.isSleeping()){ const v=it.body.linvel(), w=it.body.angvel(); it.pv={x:v.x,y:v.y,z:v.z}; it.pw={x:w.x,y:w.y,z:w.z}; } }
   ballObj.pv = {...bpv}; { const w = ballBody.angvel(); ballObj.pw = {x:w.x,y:w.y,z:w.z}; }
   world.step(eventQueue);
-  const toStick = new Set(); let bigHit = null;
+  readBody();
+  let bigHit = null;
   eventQueue.drainCollisionEvents((h1, h2, started) => {
     if (!started) return;
     const a = colliderToObj.get(h1), b = colliderToObj.get(h2);
     const o = a === 'ball' ? b : b === 'ball' ? a : null;
-    if (!o || typeof o === 'string') return;
-    if (o.size < ball.d*STICK_RATIO){ if (performance.now() >= o.noStick) toStick.add(o); }
-    else bigHit = o;
+    if (o && typeof o !== 'string' && !o.thrown && o.size >= clump.D*STICK_RATIO) bigHit = o;
   });
   eventQueue.drainContactForceEvents(e=>{
     const a = colliderToObj.get(e.collider1()), b = colliderToObj.get(e.collider2());
     if (a && b) onContact(a === 'ball' ? ballObj : a, b === 'ball' ? ballObj : b);
   });
-  if (state === 'play'){
-    for (const o of toStick) stickObject(o);
-    if (bigHit && stuck.length && Math.hypot(bpv.x, bpv.z) > KNOCK_SPEED) knockOff(1 + Math.floor(Math.random()*3), bigHit);
+  if (state !== 'play') return;
+  stepNo++;
+  if (stepNo % 3 === 1) queryItems(comW.x, comW.z, clump.Rmax + clump.D*.4 + .06 + Math.hypot(bpv.x,bpv.z)*.08, candBuf);
+  // 触れた物をくっつける：物の中心 → かたまりの重心 へ光線を飛ばして、当たった位置にくっつける
+  for (const it of candBuf){
+    if (it.state !== 'world' || now < it.noStick || it.size >= clump.D*STICK_RATIO) continue;
+    const dx = comW.x-it.p.x, dy = comW.y-it.p.y, dz = comW.z-it.p.z, d = Math.hypot(dx,dy,dz);
+    if (d > clump.Rmax + it.size*.6 + .03 + GRAB_PULL*clump.R) continue;
+    const dir = _v2.set(dx/d, dy/d, dz/d), h = support(it, it.q, dir);
+    ray.origin.x = it.p.x; ray.origin.y = it.p.y; ray.origin.z = it.p.z; ray.dir.x = dir.x; ray.dir.y = dir.y; ray.dir.z = dir.z;
+    const hit = world.castRayAndGetNormal(ray, d + .05, true, undefined, undefined, undefined, undefined, clumpOnly);
+    if (!hit) continue;
+    const toi = hit.timeOfImpact;
+    if (toi - h > Math.max(.004, .12*it.size) + GRAB_PULL*clump.R) continue;
+    let res = null;
+    if (toi > 1e-5){
+      // 向き（外向き）は 光線の逆向き と 面の法線 を混ぜる
+      const n = new THREE.Vector3(hit.normal.x, hit.normal.y, hit.normal.z);
+      if (n.dot(dir) > 0) n.negate();
+      n.multiplyScalar(.6).addScaledVector(dir, -.4).normalize();
+      res = {p: new THREE.Vector3(it.p.x + dir.x*toi, it.p.y + dir.y*toi, it.p.z + dir.z*toi), n};
+    }
+    candBuf.splice(candBuf.indexOf(it), 1);
+    attach(it, res);
+    break;
   }
+  if (stepNo % 6 === 0) updateProxies(now);
+  if (stepNo % 60 === 0){ cullBuried(); }
+  if (stepNo % 90 === 0) supply();
+  const vmax = Math.min(1.3 + 2.2*clump.D, 5.5);
+  if (bigHit && stuck.length && Math.hypot(bpv.x, bpv.z) > vmax*.8) knockOff(1 + Math.floor(Math.random()*3));
 }
-// 玉が大きくなって、すでに触れていた物が「くっつける大きさ」になったときの取りこぼし対策
-let rescan = 0;
-function rescanTouching(){
-  const bp = ballBody.translation(), lim = ball.d*STICK_RATIO, now = performance.now();
-  for (const o of objs){
-    if (o.stuck || !o.body || o.size >= lim || now < o.noStick) continue;
-    const t = o.body.translation(), r = o.body.rotation();
-    _c.copy(o.entry.center).applyQuaternion(_q.set(r.x,r.y,r.z,r.w)).add(_v.set(t.x,t.y,t.z));   // 物の中心（原点は底にある）
-    const dist = Math.hypot(_c.x-bp.x, _c.y-bp.y, _c.z-bp.z);
-    if (dist > ball.d/2 + o.size + .03) continue;
-    // 核は触れていなくても、くっついた物の出っぱりで玉が浮いて、その下に小さな物が入り込むことがある → 近ければくっつける
-    if (dist < ball.d/2 + o.size*.6 + .01){ stickObject(o); continue; }
-    let touch = false;
-    world.contactPair(core, o.col, m => { if (m.numContacts() > 0) touch = true; });
-    if (touch) stickObject(o);
-  }
-}
+
+// テスト用：ブラウザのコンソールから状態を確認・操作できるようにする
+window.__roll = { world, clump, ballBody, stuck, collected, dbg, camera, renderer, scene, proxies, grid,
+  get state(){ return state; }, get loaded(){ return loadedModels; }, get total(){ return MODELS.length; }, get expanded(){ return expanded; },
+  get timeLeft(){ return timeLeft; }, set timeLeft(v){ timeLeft = v; }, set yaw(v){ yaw = v; }, get yaw(){ return yaw; },
+  get worldCount(){ return worldCount; }, get models(){ return MODELS; }, get plan(){ return plan; }, finish, bodyPos, bodyQ, comW,
+  // 大きさを強制的に上げる（壁がたおれる場面などのテスト用）
+  force(d){ clump.D = d; clump.R = d/2; clump.maxD = Math.max(clump.maxD, d); setCore(Math.max(D0/2, CORE_FRAC*d/2)); checkMilestones(); updateHud(); },
+  // 描画なしで物理だけ進める（テストを速くする）
+  sim(steps){ for (let i=0;i<steps;i++){ stepPhysics(); if (state === 'play'){ timeLeft -= DT; if (timeLeft <= 0){ timeLeft = 0; finish(); } } syncProxies(); } readBody(); },
+  stats(){ let bodies = 0; world.bodies.forEach(b => { if (!b.isSleeping() && !b.isFixed()) bodies++; }); return {bodies, proxies: proxies.size, colliders: world.colliders.len?.() ?? 0, hulls: stuck.filter(s=>s.hull).length, hidden: stuck.filter(s=>s.hidden).length, calls: renderer.info.render.calls, tris: renderer.info.render.triangles}; } };
 
 /* =========================================================
    起動
    ========================================================= */
 $('startBtn').disabled = true;
+function pickModels(){
+  const pool = META.filter(m => m.size && (m.tris ?? 0) <= 12000 && m.size*SCALE >= .025 && m.size*SCALE <= .36);
+  const used = new Set(), out = [];
+  for (const [lo,hi,n] of [[.025,.04,7],[.04,.07,10],[.07,.12,10],[.12,.2,9],[.2,.36,4]]){
+    let p = pool.filter(m => m.size*SCALE >= lo && m.size*SCALE < hi && !used.has(m.id));
+    for (let i=0;i<n && p.length;i++){ const m = pickWeighted(p); out.push(m); used.add(m.id); p = p.filter(x=>x!==m); }
+  }
+  return out.map(meta => ({meta, s0est: meta.size*SCALE, s0: meta.size*SCALE, loaded: false, cap: 0}));
+}
 const ready = (async () => {
   [META] = await Promise.all([loadMetadata(), loadHulls()]);
   META = META.filter(m => m.size);
+  MODELS = pickModels();
+  genPlan();
+  MODELS.forEach((m,i) => { m.cap = byModel[i].length + EXTRA_CAP + 20; });
   updateHud();
-  populate(makePlan(), runId);
+  loadAll();
 })();
 ready.catch(err=>{ console.error(err); $('startMsg').textContent = 'データセットの読み込みに失敗しました'; });
 $('startBtn').onclick = async () => {
@@ -749,18 +1126,15 @@ $('startBtn').onclick = async () => {
   $('start').querySelectorAll('button,a,p').forEach(el=>el.style.display = 'none');
   $('startMsg').textContent = '部屋を準備中…';
   await ready;
-  if (loadedCount >= Math.min(START_READY, totalCount) && totalCount) beginPlay();
+  if (loadedModels >= Math.min(START_READY, MODELS.length)) beginPlay();
 };
-
-// テスト用：ブラウザのコンソールから状態を確認・操作できるようにする
-window.__roll = { world, ball, setDiameter, finish, ballBody, objs, stuck, collected, dbg, camera, get state(){ return state; }, get loaded(){ return loadedCount; }, get total(){ return totalCount; },
-  get timeLeft(){ return timeLeft; }, set timeLeft(v){ timeLeft = v; }, set yaw(v){ yaw = v; }, get yaw(){ return yaw; } };
 
 /* =========================================================
    メインループ
    ========================================================= */
-let acc = 0, last = performance.now(), hudTick = 0;
+let acc = 0, last = performance.now(), hudTick = 0, dispD = D0;
 const occRay = new THREE.Raycaster();
+const want = new THREE.Vector3(), tgt = new THREE.Vector3(), toCam = new THREE.Vector3();
 renderer.setAnimationLoop(now=>{
   const frame = Math.min(.1, (now-last)/1000); last = now;
   acc += frame;
@@ -770,36 +1144,37 @@ renderer.setAnimationLoop(now=>{
     stepPhysics(); acc -= DT; n++;
     if (state === 'play'){
       timeLeft -= DT;
-      if (++rescan % 6 === 0) rescanTouching();
-      if (ball.d >= GOAL) finish(true);
-      else if (timeLeft <= 0){ timeLeft = 0; finish(false); }
+      if (timeLeft <= 0){ timeLeft = 0; finish(); }
     }
   }
   if (n === 4) acc = 0;
   // 見た目を物理に合わせる（眠っている物は動かさない）
-  for (const o of objs){
-    if (!o.body || o.body.isSleeping()) continue;
-    const p=o.body.translation(), r=o.body.rotation(); o.mesh.position.set(p.x,p.y,p.z); o.mesh.quaternion.set(r.x,r.y,r.z,r.w);
-  }
-  syncBall(); const bp = ballBody.translation();
+  syncProxies(); readBody();
+  clumpGroup.position.copy(bodyPos); clumpGroup.quaternion.copy(bodyQ);
+  updatePop(performance.now()); updateFall(performance.now()); updateDust(frame);
+  flushInstances();
   if (state === 'play' && ++hudTick % 6 === 0) updateHud();
-  // カメラ：玉の後ろ上から。大きくなるほど離れる
-  const dist = .28 + 3.3*ball.d, pitch = .55;
+  // カメラ：かたまりの後ろ上から。大きくなるほど離れる（大きさは少しなめらかに追いかける）
+  dispD += (clump.D - dispD)*(1 - Math.exp(-frame*3));
+  const dist = .17 + 2.9*dispD, pitch = .55 + Math.min(.15, dispD*.1);
   fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
-  const want = new THREE.Vector3(bp.x - fwd.x*dist*Math.cos(pitch), bp.y + ball.d*.3 + dist*Math.sin(pitch), bp.z - fwd.z*dist*Math.cos(pitch));
-  // 家具が玉をさえぎるなら、手前にカメラを寄せる
-  const tgt = new THREE.Vector3(bp.x, bp.y + ball.d*.15, bp.z), toCam = want.clone().sub(tgt), full = toCam.length();
+  tgt.set(comW.x, comW.y + dispD*.1, comW.z);
+  want.set(comW.x - fwd.x*dist*Math.cos(pitch), comW.y + dispD*.3 + dist*Math.sin(pitch), comW.z - fwd.z*dist*Math.cos(pitch));
+  // 家具が かたまりをさえぎるなら、手前にカメラを寄せる
+  toCam.copy(want).sub(tgt); const full = toCam.length();
   occRay.set(tgt, toCam.normalize()); occRay.far = full;
-  const hit = occRay.intersectObjects(FURN_MESH, false)[0];
-  if (hit) want.copy(tgt).addScaledVector(toCam, Math.max(hit.distance - .05, ball.d*.8));
+  const hit = occRay.intersectObject(boxMesh, false)[0];
+  if (hit) want.copy(tgt).addScaledVector(toCam, Math.max(hit.distance - .05, dispD*.8));
   camPos.lerp(want, 1 - Math.exp(-frame*(hit ? 20 : 8)));
-  camPos.x = clamp(camPos.x, -HALF+.1, HALF-.1); camPos.z = clamp(camPos.z, -HALF+.1, HALF-.1);
+  const bh = boundHalf() - .1 + (expanded ? dispD*3.5 : 0);   // 大きくなったら、カメラは広場の外まで引ける
+  camPos.x = clamp(camPos.x, -bh, bh); camPos.z = clamp(camPos.z, -bh, bh);
   camera.position.copy(camPos);
-  camera.lookAt(bp.x, bp.y + ball.d*.15, bp.z);
-  // 影は玉のまわりだけ
-  const ext = .8 + 2.6*ball.d;
-  sun.position.set(bp.x + 1.4*(1+ball.d*2), 3.2*(1+ball.d*2), bp.z + .9*(1+ball.d*2)); sun.target.position.set(bp.x, 0, bp.z);
-  Object.assign(sun.shadow.camera, {left:-ext, right:ext, top:ext, bottom:-ext, near:.5, far:12}); sun.shadow.camera.updateProjectionMatrix();
+  camera.lookAt(tgt);
+  const nr = clamp(.008 + dispD*.04, .01, .3); if (Math.abs(camera.near - nr) > nr*.3){ camera.near = nr; camera.updateProjectionMatrix(); }
+  // 影はかたまりのまわりだけ
+  const ext = .8 + 2.6*dispD, sc = 1 + dispD*2;
+  sun.position.set(comW.x + 1.4*sc, 3.2*sc, comW.z + .9*sc); sun.target.position.set(comW.x, 0, comW.z);
+  Object.assign(sun.shadow.camera, {left:-ext, right:ext, top:ext, bottom:-ext, near:.5, far:12*sc}); sun.shadow.camera.updateProjectionMatrix();
   renderer.render(scene, camera);
 });
 </script>

@@ -113,6 +113,7 @@ export async function loadMetadata(){
       id, name: r.name ?? id, category: r.category ?? r.shelf_category ?? '', brand: r.brand ?? '',
       size: dims.length ? Math.max(...dims) : undefined,
       mass: num(r.mass_estimate_kg) ?? num(r.mass_kg) ?? num(r.mass),
+      tris: num(r.triangles),
     };
   }).filter(m=>m.id);
 }
